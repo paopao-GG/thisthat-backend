@@ -4,14 +4,18 @@ import BettingControls from '../../features/betting/components/BettingControls';
 import type { Market } from '../../shared/types';
 import { eventMarketGroupService, type EventMarketGroup } from '../../shared/services/eventMarketGroupService';
 import type { BackendMarket } from '../../shared/services/marketService';
+import { useAuth } from '../../shared/contexts/AuthContext';
+import { betService } from '../../shared/services/betService';
 
 const BettingPage: React.FC = () => {
+  const { user, refreshUser } = useAuth();
   const [eventGroups, setEventGroups] = useState<EventMarketGroup[]>([]);
   const [currentEventIndex, setCurrentEventIndex] = useState(0);
   const [currentMarketIndex, setCurrentMarketIndex] = useState(0);
-  const [userCredits] = useState(1000); // TODO: Get from user context/auth
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [bettingError, setBettingError] = useState<string | null>(null);
+  const [bettingSuccess, setBettingSuccess] = useState<string | null>(null);
 
   // Fetch event-market groups on component mount
   useEffect(() => {
@@ -104,10 +108,36 @@ const BettingPage: React.FC = () => {
     setCurrentMarketIndex(0);
   };
 
-  const handlePlaceBet = (option: 'THIS' | 'THAT', amount: number) => {
-    console.log(`Placing bet: ${option} with ${amount} credits on market ${currentMarket?.id}`);
-    // TODO: Implement actual bet placement logic
-    alert(`Bet placed: ${option} - ${amount} credits`);
+  const handlePlaceBet = async (option: 'THIS' | 'THAT', amount: number) => {
+    if (!currentMarket || !user) {
+      setBettingError('Please select a market and ensure you are logged in');
+      return;
+    }
+
+    setBettingError(null);
+    setBettingSuccess(null);
+
+    try {
+      // Place bet via API
+      const response = await betService.placeBet({
+        marketId: currentMarket.id,
+        side: option.toLowerCase() as 'this' | 'that',
+        amount: amount,
+      });
+
+      if (response.success) {
+        // Refresh user data to get updated credits
+        await refreshUser();
+        
+        const potentialPayout = response.potentialPayout.toFixed(2);
+        setBettingSuccess(`Bet placed: ${option} - ${amount} credits. Potential payout: ${potentialPayout} credits`);
+        setTimeout(() => setBettingSuccess(null), 5000);
+      }
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to place bet';
+      setBettingError(errorMessage);
+      console.error('Bet placement error:', err);
+    }
   };
 
   // Loading state
@@ -185,10 +215,20 @@ const BettingPage: React.FC = () => {
       </div>
 
       <div className="w-full">
+        {bettingError && (
+          <div className="mb-4 p-3 border border-red-500/50 text-red-400 text-sm text-center">
+            {bettingError}
+          </div>
+        )}
+        {bettingSuccess && (
+          <div className="mb-4 p-3 border border-green-500/50 text-green-400 text-sm text-center">
+            {bettingSuccess}
+          </div>
+        )}
         <BettingControls
           market={currentMarket}
           onPlaceBet={handlePlaceBet}
-          maxCredits={userCredits}
+          maxCredits={user?.creditBalance || 0}
         />
       </div>
 

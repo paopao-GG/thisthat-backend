@@ -18,6 +18,9 @@ export interface User {
   email: string;
   name: string | null;
   creditBalance: number;
+  availableCredits: number;
+  expendedCredits: number;
+  consecutiveDaysOnline: number;
 }
 
 export interface AuthResponse {

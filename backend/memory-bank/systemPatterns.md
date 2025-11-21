@@ -13,12 +13,13 @@
 ┌────────▼────────────────────────────────────┐
 │         Fastify API Server                  │
 │  ┌──────────────────────────────────────┐  │
-│  │  Auth Module (JWT)                   │  │
-│  │  User Module (Profiles, Credits)     │  │
-│  │  Market Module (Ingestion, Display)  │  │
-│  │  Betting Module (Placement, Payout)  │  │
-│  │  Leaderboard Module (Rankings)       │  │
-│  │  Rewards Module (Daily Login)        │  │
+│  │  Auth Module (JWT) ✅                │  │
+│  │  User Module (Profiles) ✅            │  │
+│  │  Betting Module (Placement, Payout) ✅│  │
+│  │  Economy Module (Daily Credits, Stocks) ✅│
+│  │  Sync Module (MongoDB→PostgreSQL) ✅  │  │
+│  │  Market Module (Ingestion, Display) ✅│  │
+│  │  Leaderboard Module (Rankings) ⏳     │  │
 │  └──────────────────────────────────────┘  │
 └────────┬─────────────────────┬──────────────┘
          │                     │
@@ -40,13 +41,14 @@
 
 **Structure:**
 ```
-modules/
-├── auth/          # Everything auth-related
-├── users/         # User management
-├── markets/       # Market operations
-├── bets/          # Betting logic
-├── leaderboard/   # Ranking system
-└── rewards/       # Daily rewards
+features/
+├── auth/          # Authentication (JWT, signup, login) ✅
+├── users/         # User management (profiles) ✅
+├── betting/       # Betting logic (place, history) ✅
+├── economy/       # Economy system (daily credits, stocks) ✅
+├── sync/          # MongoDB ↔ PostgreSQL sync ✅
+├── fetching/      # Polymarket data fetching ✅
+└── leaderboard/   # Ranking system ⏳
 ```
 
 **Rationale:**

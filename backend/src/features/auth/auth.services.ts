@@ -17,6 +17,9 @@ export interface UserProfile {
   email: string;
   name: string | null;
   creditBalance: number;
+  availableCredits: number;
+  expendedCredits: number;
+  consecutiveDaysOnline: number;
 }
 
 /**
@@ -61,7 +64,7 @@ export async function registerUser(
   // Hash password
   const passwordHash = await hashPassword(input.password);
 
-  // Create user with starting credits
+  // Create user with starting credits and economy fields
   const user = await prisma.user.create({
     data: {
       username: input.username,
@@ -69,6 +72,10 @@ export async function registerUser(
       name: input.name,
       passwordHash,
       creditBalance: STARTING_CREDITS,
+      availableCredits: STARTING_CREDITS, // Initialize available credits
+      expendedCredits: 0, // Initialize expended credits
+      consecutiveDaysOnline: 1, // Start with 1 day
+      lastLoginAt: new Date(), // Set initial login time
     },
   });
 
@@ -110,6 +117,9 @@ export async function registerUser(
       email: user.email,
       name: user.name,
       creditBalance: Number(user.creditBalance),
+      availableCredits: Number(user.availableCredits),
+      expendedCredits: Number(user.expendedCredits),
+      consecutiveDaysOnline: user.consecutiveDaysOnline,
     },
     tokens: {
       accessToken,
@@ -161,10 +171,38 @@ export async function authenticateUser(
     },
   });
 
-  // Update last login timestamp
+  // Update last login timestamp and check consecutive days
+  const now = new Date();
+  const lastLoginAt = user.lastLoginAt;
+  
+  let consecutiveDays = user.consecutiveDaysOnline;
+  if (lastLoginAt) {
+    const daysSinceLastLogin = Math.floor(
+      (now.getTime() - lastLoginAt.getTime()) / (1000 * 60 * 60 * 24)
+    );
+    
+    if (daysSinceLastLogin === 0) {
+      // Same day login - maintain streak
+      consecutiveDays = user.consecutiveDaysOnline;
+    } else if (daysSinceLastLogin === 1) {
+      // Next day - increment streak
+      consecutiveDays = user.consecutiveDaysOnline + 1;
+    } else {
+      // Streak broken - reset to 1
+      consecutiveDays = 1;
+    }
+  } else {
+    // First login
+    consecutiveDays = 1;
+  }
+
   await prisma.user.update({
     where: { id: user.id },
-    data: { updatedAt: new Date() },
+    data: {
+      updatedAt: now,
+      lastLoginAt: now,
+      consecutiveDaysOnline: consecutiveDays,
+    },
   });
 
   return {
@@ -174,6 +212,9 @@ export async function authenticateUser(
       email: user.email,
       name: user.name,
       creditBalance: Number(user.creditBalance),
+      availableCredits: Number(user.availableCredits),
+      expendedCredits: Number(user.expendedCredits),
+      consecutiveDaysOnline: user.consecutiveDaysOnline,
     },
     tokens: {
       accessToken,
@@ -194,6 +235,9 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
       email: true,
       name: true,
       creditBalance: true,
+      availableCredits: true,
+      expendedCredits: true,
+      consecutiveDaysOnline: true,
     },
   });
 
@@ -207,5 +251,8 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
     email: user.email,
     name: user.name,
     creditBalance: Number(user.creditBalance),
+    availableCredits: Number(user.availableCredits),
+    expendedCredits: Number(user.expendedCredits),
+    consecutiveDaysOnline: user.consecutiveDaysOnline,
   };
 }

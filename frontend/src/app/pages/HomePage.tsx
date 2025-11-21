@@ -39,6 +39,14 @@ const HomePage: React.FC = () => {
           <button 
             className="w-full px-6 py-3.5 text-sm font-semibold text-white border border-white/10 hover:border-white/20 transition-all tracking-wide uppercase"
             style={{ background: 'rgba(30, 30, 30, 0.8)' }}
+            onClick={() => navigate('/login')}
+          >
+            Login
+          </button>
+          
+          <button 
+            className="w-full px-6 py-3.5 text-sm font-semibold text-white border border-white/10 hover:border-white/20 transition-all tracking-wide uppercase"
+            style={{ background: 'rgba(30, 30, 30, 0.8)' }}
             onClick={() => navigate('/play')}
           >
             Play
@@ -50,6 +58,14 @@ const HomePage: React.FC = () => {
             onClick={() => navigate('/leaderboard')}
           >
             Leaderboards
+          </button>
+          
+          <button 
+            className="w-full px-6 py-3.5 text-sm font-semibold text-white border border-white/10 hover:border-white/20 transition-all tracking-wide uppercase"
+            style={{ background: 'rgba(30, 30, 30, 0.8)' }}
+            onClick={() => navigate('/stocks')}
+          >
+            Stock Market
           </button>
         </div>
       </div>

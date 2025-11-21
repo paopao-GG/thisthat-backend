@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { authService, type User } from '../services/authService';
 
 interface AuthContextType {
@@ -50,11 +50,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const login = async (email: string, password: string) => {
-    const response = await authService.login({ email, password });
-    if (response.success) {
-      setUser(response.user);
-    } else {
-      throw new Error('Login failed');
+    try {
+      const response = await authService.login({ email, password });
+      if (response.success) {
+        setUser(response.user);
+      } else {
+        throw new Error(response.error || 'Login failed');
+      }
+    } catch (error: any) {
+      // Re-throw with better error message
+      throw new Error(error.message || 'Failed to login. Please check your credentials and try again.');
     }
   };
 
@@ -63,10 +68,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
-  const refreshUser = async () => {
-    const currentUser = await authService.getCurrentUser();
-    setUser(currentUser);
-  };
+  const refreshUser = useCallback(async () => {
+    try {
+      const currentUser = await authService.getCurrentUser();
+      setUser(currentUser);
+    } catch (error) {
+      console.error('Failed to refresh user:', error);
+    }
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, loading, signup, login, logout, refreshUser }}>

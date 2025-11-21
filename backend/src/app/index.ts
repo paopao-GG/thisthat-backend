@@ -7,6 +7,12 @@ import marketDataRoutes from '../features/fetching/market-data/market-data.route
 import eventDataRoutes from '../features/fetching/event-data/event-data.routes.js';
 import eventMarketGroupRoutes from '../features/fetching/event-market-group/event-market-group.routes.js';
 import authRoutes from '../features/auth/auth.routes.js';
+import userRoutes from '../features/users/user.routes.js';
+import economyRoutes from '../features/economy/economy.routes.js';
+import bettingRoutes from '../features/betting/betting.routes.js';
+import syncRoutes from '../features/sync/sync.routes.js';
+import { startDailyCreditsJob, stopDailyCreditsJob } from '../jobs/daily-credits.job.js';
+import { startMarketSyncJob, stopMarketSyncJob } from '../jobs/market-sync.job.js';
 
 // Load environment variables
 dotenv.config();
@@ -53,6 +59,18 @@ await fastify.register(eventMarketGroupRoutes, { prefix: '/api/v1/event-market-g
 // Register Auth routes
 await fastify.register(authRoutes, { prefix: '/api/v1/auth' });
 
+// Register User routes
+await fastify.register(userRoutes, { prefix: '/api/v1/users' });
+
+// Register Economy routes
+await fastify.register(economyRoutes, { prefix: '/api/v1/economy' });
+
+// Register Betting routes
+await fastify.register(bettingRoutes, { prefix: '/api/v1/bets' });
+
+// Register Sync routes
+await fastify.register(syncRoutes, { prefix: '/api/v1/sync' });
+
 // Error handling
 fastify.setErrorHandler((error, request, reply) => {
   fastify.log.error(error);
@@ -71,6 +89,10 @@ const start = async () => {
 
     await fastify.listen({ port, host });
     console.log(`🚀 Server listening on http://${host}:${port}`);
+
+    // Start background jobs
+    startDailyCreditsJob();
+    startMarketSyncJob();
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);
@@ -81,6 +103,11 @@ const start = async () => {
 const gracefulShutdown = async () => {
   try {
     fastify.log.info('🛑 Shutting down gracefully...');
+    
+    // Stop background jobs
+    stopDailyCreditsJob();
+    stopMarketSyncJob();
+    
     await fastify.close();
     await closeMongoDB();
     fastify.log.info('✅ Server and database connections closed');

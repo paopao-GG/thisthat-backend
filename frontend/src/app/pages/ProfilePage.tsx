@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../shared/contexts/AuthContext';
-import type { UserStats, Bet } from '../../shared/types';
+import { economyService } from '../../shared/services/economyService';
+import { betService, type Bet } from '../../shared/services/betService';
+import type { UserStats } from '../../shared/types';
 
 // Mock data for stats that aren't in user profile yet
 const getDefaultStats = (username: string): UserStats => ({
@@ -18,26 +20,111 @@ const getDefaultStats = (username: string): UserStats => ({
   lockedTokens: 0,
 });
 
-// Mock recent bets - will be replaced with actual API call later
-const mockRecentBets: Bet[] = [];
-
 const ProfilePage: React.FC = () => {
   const navigate = useNavigate();
   const { user, loading, refreshUser } = useAuth();
   const [userStats, setUserStats] = useState<UserStats | null>(null);
+  const [recentBets, setRecentBets] = useState<Bet[]>([]);
+  const [claimingReward, setClaimingReward] = useState(false);
+  const [rewardError, setRewardError] = useState<string | null>(null);
+  const [rewardSuccess, setRewardSuccess] = useState<string | null>(null);
+  const [loadingBets, setLoadingBets] = useState(false);
 
+  // Load bets history
+  const loadBets = React.useCallback(async () => {
+    setLoadingBets(true);
+    try {
+      const response = await betService.getUserBets({ limit: 10 });
+      if (response.success) {
+        setRecentBets(response.bets);
+      }
+    } catch (error: any) {
+      console.error('Failed to load bets:', error);
+    } finally {
+      setLoadingBets(false);
+    }
+  }, []);
+
+  // Redirect to signup if not authenticated
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate('/signup');
+    }
+  }, [user, loading, navigate]);
+
+  // Load user stats when user changes
   useEffect(() => {
     if (user) {
       const stats = getDefaultStats(user.username);
       stats.userId = user.id;
       stats.credits = user.creditBalance;
+      stats.dailyStreak = user.consecutiveDaysOnline || 0;
       setUserStats(stats);
-      refreshUser(); // Refresh user data
-    } else if (!loading) {
-      // Redirect to signup if not authenticated
-      navigate('/signup');
     }
-  }, [user, loading, navigate, refreshUser]);
+  }, [user]);
+
+  // Load bets on initial mount only
+  useEffect(() => {
+    if (user) {
+      loadBets();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  // Handle daily reward claim
+  const handleClaimReward = async () => {
+    if (!user) return;
+    
+    setClaimingReward(true);
+    setRewardError(null);
+    setRewardSuccess(null);
+
+    try {
+      const result = await economyService.claimDailyCredits();
+      if (result.success) {
+        if (result.creditsAwarded > 0) {
+          setRewardSuccess(`Claimed ${result.creditsAwarded} credits! Streak: ${result.consecutiveDays} days`);
+          // Refresh user data to update credits and streak
+          await refreshUser();
+          // Update stats
+          if (userStats) {
+            setUserStats({
+              ...userStats,
+              credits: user.creditBalance + result.creditsAwarded,
+              dailyStreak: result.consecutiveDays,
+            });
+          }
+        } else {
+          // Already claimed - show when next available
+          const nextTime = new Date(result.nextAvailableAt).toLocaleTimeString();
+          setRewardError(`Already claimed! Next reward available at ${nextTime}`);
+        }
+        setTimeout(() => {
+          setRewardSuccess(null);
+          setRewardError(null);
+        }, 5000);
+      }
+    } catch (error: any) {
+      const errorMessage = error.message || 'Failed to claim daily reward';
+      setRewardError(errorMessage);
+      console.error('Claim reward error:', error);
+    } finally {
+      setClaimingReward(false);
+    }
+  };
+
+  // Refresh user data periodically to keep credits updated
+  useEffect(() => {
+    if (!user) return;
+
+    const interval = setInterval(() => {
+      refreshUser();
+      loadBets();
+    }, 30000); // Refresh every 30 seconds
+
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   const purchaseOptions = [
     { credits: 500, price: 4.99, popular: false },
@@ -159,9 +246,22 @@ const ProfilePage: React.FC = () => {
             <span className="text-xl">🔥</span>
             <span className="font-medium text-white">{userStats.dailyStreak} Day Streak</span>
           </div>
-          <button className="px-6 py-3 text-white font-semibold transition-all border border-white/10 hover:border-white/20" style={{ background: 'rgba(30, 30, 30, 0.8)' }}>
-            Claim Today's Reward (+100)
-          </button>
+          <div className="flex flex-col items-end gap-2">
+            {rewardError && (
+              <div className="text-xs text-red-400">{rewardError}</div>
+            )}
+            {rewardSuccess && (
+              <div className="text-xs text-green-400">{rewardSuccess}</div>
+            )}
+            <button 
+              onClick={handleClaimReward}
+              disabled={claimingReward}
+              className="px-6 py-3 text-white font-semibold transition-all border border-white/10 hover:border-white/20 disabled:opacity-50 disabled:cursor-not-allowed" 
+              style={{ background: 'rgba(30, 30, 30, 0.8)' }}
+            >
+              {claimingReward ? 'Claiming...' : 'Claim Today\'s Reward'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -240,43 +340,64 @@ const ProfilePage: React.FC = () => {
 
       <div className="mt-8">
         <h2 className="text-xl font-semibold m-0 mb-4 text-white">Recent Bets</h2>
-        <div className="flex flex-col gap-3">
-          {mockRecentBets.map((bet) => (
-            <div key={bet.id} className="flex items-center gap-4 p-4 border border-white/10 md:flex-wrap" style={{ background: 'rgba(30, 30, 30, 0.8)' }}>
-              <div className="min-w-[60px]">
-                <span className={`inline-block px-3 py-1.5 text-xs font-medium tracking-wide border ${
-                  bet.option.toLowerCase() === 'this'
-                    ? 'border-white/20 text-white'
-                    : 'border-white/20 text-white'
-                }`} style={{ background: 'transparent' }}>
-                  {bet.option}
-                </span>
-              </div>
-              <div className="flex-1 flex flex-col gap-1">
-                <span className="text-sm font-medium text-white">{bet.amount} credits @ {bet.odds}x</span>
-                <span className="text-xs text-white/50">
-                  {bet.timestamp.toLocaleDateString()}
-                </span>
-              </div>
-              <div className="flex flex-col items-end gap-1">
-                <span className={`px-3 py-1.5 text-xs font-medium border ${
-                  bet.status === 'won'
-                    ? 'border-white/20 text-white'
-                    : bet.status === 'lost'
-                    ? 'border-white/20 text-white/70'
-                    : 'border-white/20 text-white/60'
-                }`} style={{ background: 'transparent' }}>
-                  {bet.status === 'won' && '✓ Won'}
-                  {bet.status === 'lost' && '✗ Lost'}
-                  {bet.status === 'pending' && '⏳ Pending'}
-                </span>
-                {bet.status === 'won' && bet.payout && (
-                  <span className="text-sm font-semibold text-white">+{bet.payout.toFixed(0)}</span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+        {loadingBets ? (
+          <div className="text-center py-8">
+            <div className="text-white/50">Loading bets...</div>
+          </div>
+        ) : recentBets.length === 0 ? (
+          <div className="text-center py-8">
+            <div className="text-white/50">No bets yet. Start betting to see your history here!</div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {recentBets.map((bet) => {
+              const oddsMultiplier = bet.oddsAtBet > 0 ? (1 / bet.oddsAtBet).toFixed(2) : '1.00';
+              const placedDate = new Date(bet.placedAt);
+              
+              return (
+                <div key={bet.id} className="flex items-center gap-4 p-4 border border-white/10 md:flex-wrap" style={{ background: 'rgba(30, 30, 30, 0.8)' }}>
+                  <div className="min-w-[60px]">
+                    <span className={`inline-block px-3 py-1.5 text-xs font-medium tracking-wide border ${
+                      bet.side.toLowerCase() === 'this'
+                        ? 'border-white/20 text-white'
+                        : 'border-white/20 text-white'
+                    }`} style={{ background: 'transparent' }}>
+                      {bet.side.toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex-1 flex flex-col gap-1">
+                    <span className="text-sm font-medium text-white">
+                      {bet.market.title}
+                    </span>
+                    <span className="text-xs text-white/50">
+                      {bet.amount} credits @ {oddsMultiplier}x • {placedDate.toLocaleDateString()}
+                    </span>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className={`px-3 py-1.5 text-xs font-medium border ${
+                      bet.status === 'won'
+                        ? 'border-green-500/50 text-green-400'
+                        : bet.status === 'lost'
+                        ? 'border-red-500/50 text-red-400'
+                        : 'border-white/20 text-white/60'
+                    }`} style={{ background: 'transparent' }}>
+                      {bet.status === 'won' && '✓ Won'}
+                      {bet.status === 'lost' && '✗ Lost'}
+                      {bet.status === 'pending' && '⏳ Pending'}
+                      {bet.status === 'cancelled' && '✗ Cancelled'}
+                    </span>
+                    {bet.status === 'won' && bet.actualPayout != null && (
+                      <span className="text-sm font-semibold text-green-400">+{Number(bet.actualPayout).toFixed(2)}</span>
+                    )}
+                    {bet.status === 'pending' && bet.potentialPayout != null && (
+                      <span className="text-xs text-white/50">Potential: {Number(bet.potentialPayout).toFixed(2)}</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
