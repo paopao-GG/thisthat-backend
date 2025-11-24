@@ -13,6 +13,11 @@ import bettingRoutes from '../features/betting/betting.routes.js';
 import syncRoutes from '../features/sync/sync.routes.js';
 import { startDailyCreditsJob, stopDailyCreditsJob } from '../jobs/daily-credits.job.js';
 import { startMarketSyncJob, stopMarketSyncJob } from '../jobs/market-sync.job.js';
+import { startMarketResolutionJob, stopMarketResolutionJob } from '../jobs/market-resolution.job.js';
+import { startLeaderboardUpdateJob, stopLeaderboardUpdateJob } from '../jobs/leaderboard-update.job.js';
+import leaderboardRoutes from '../features/leaderboard/leaderboard.routes.js';
+import transactionRoutes from '../features/transactions/transactions.routes.js';
+import redis from '../lib/redis.js';
 
 // Load environment variables
 dotenv.config();
@@ -71,6 +76,12 @@ await fastify.register(bettingRoutes, { prefix: '/api/v1/bets' });
 // Register Sync routes
 await fastify.register(syncRoutes, { prefix: '/api/v1/sync' });
 
+// Register Leaderboard routes
+await fastify.register(leaderboardRoutes, { prefix: '/api/v1/leaderboard' });
+
+// Register Transaction routes
+await fastify.register(transactionRoutes, { prefix: '/api/v1/transactions' });
+
 // Error handling
 fastify.setErrorHandler((error, request, reply) => {
   fastify.log.error(error);
@@ -90,9 +101,21 @@ const start = async () => {
     await fastify.listen({ port, host });
     console.log(`🚀 Server listening on http://${host}:${port}`);
 
+    // Connect to Redis (optional - system works without it)
+    try {
+      if (!redis.isOpen) {
+        await redis.connect();
+        fastify.log.info('✅ Redis connected successfully');
+      }
+    } catch (err) {
+      fastify.log.warn({ err }, '⚠️  Redis not available (continuing without cache - leaderboards will work but be slower)');
+    }
+
     // Start background jobs
     startDailyCreditsJob();
     startMarketSyncJob();
+    startMarketResolutionJob();
+    startLeaderboardUpdateJob();
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);
@@ -107,6 +130,17 @@ const gracefulShutdown = async () => {
     // Stop background jobs
     stopDailyCreditsJob();
     stopMarketSyncJob();
+    stopMarketResolutionJob();
+    stopLeaderboardUpdateJob();
+    
+    // Close Redis connection
+    try {
+      if (redis.isOpen) {
+        await redis.quit();
+      }
+    } catch (err) {
+      fastify.log.warn({ err }, 'Error closing Redis connection');
+    }
     
     await fastify.close();
     await closeMongoDB();

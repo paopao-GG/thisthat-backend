@@ -19,7 +19,9 @@
 │  │  Economy Module (Daily Credits, Stocks) ✅│
 │  │  Sync Module (MongoDB→PostgreSQL) ✅  │  │
 │  │  Market Module (Ingestion, Display) ✅│  │
-│  │  Leaderboard Module (Rankings) ⏳     │  │
+│  │  Leaderboard Module (Rankings) ✅     │  │
+│  │  Market Resolution Module ✅          │  │
+│  │  Transaction History Module ✅        │  │
 │  └──────────────────────────────────────┘  │
 └────────┬─────────────────────┬──────────────┘
          │                     │
@@ -529,3 +531,178 @@ const MAX_BET = 10000;
 // Good
 const MAX_BET = process.env.MAX_BET_AMOUNT || 10000;
 ```
+
+---
+
+## Testing Patterns
+
+### ✅ Do: Use `vi.hoisted()` for Mock Objects
+
+**Pattern:** When mocking modules in Vitest, use `vi.hoisted()` to create mock objects that are hoisted along with `vi.mock()` calls.
+
+```typescript
+// ✅ CORRECT: Hoisted mock object
+const mockPrisma = vi.hoisted(() => ({
+  user: {
+    findUnique: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+  },
+  bet: {
+    findMany: vi.fn(),
+    create: vi.fn(),
+  },
+  $transaction: vi.fn(),
+}));
+
+// ✅ Mock module using hoisted object
+vi.mock('../../../lib/database.js', () => ({
+  prisma: mockPrisma,
+}));
+
+// ✅ Import service AFTER mocks (Vitest hoists anyway, but clearer)
+import * as authService from '../auth.services.js';
+
+describe('Auth Services', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Set up $transaction mock
+    mockPrisma.$transaction.mockImplementation(async (callback: any) => {
+      return callback(mockPrisma);
+    });
+  });
+
+  it('should work', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue(null);
+    // ... test code
+  });
+});
+```
+
+### ❌ Don't: Import Variables in Mock Factories
+
+**Problem:** Vitest hoists `vi.mock()` calls before any code execution, so variables created outside `vi.hoisted()` aren't available.
+
+```typescript
+// ❌ WRONG: Variable not hoisted
+import { createMockPrisma } from '../../../lib/__tests__/prisma-mock.js';
+
+const mockPrisma = createMockPrisma(); // Not hoisted!
+
+vi.mock('../../../lib/database.js', () => ({
+  prisma: mockPrisma, // ❌ Error: Cannot access before initialization
+}));
+```
+
+### ✅ Do: Self-Contained Mock Objects
+
+**Pattern:** Keep mock objects self-contained with no external dependencies.
+
+```typescript
+// ✅ CORRECT: Self-contained hoisted mock
+const mockPrisma = vi.hoisted(() => ({
+  user: {
+    findUnique: vi.fn(),
+    create: vi.fn(),
+  },
+  // No imports, no external dependencies
+}));
+
+vi.mock('../../../lib/database.js', () => ({
+  prisma: mockPrisma,
+}));
+```
+
+### ✅ Do: Mock Multiple Dependencies
+
+**Pattern:** Use separate `vi.hoisted()` calls for different mock objects.
+
+```typescript
+// ✅ CORRECT: Multiple hoisted mocks
+const mockPrisma = vi.hoisted(() => ({
+  user: { findUnique: vi.fn() },
+}));
+
+const mockRedis = vi.hoisted(() => ({
+  safeRedisGet: vi.fn(),
+  safeRedisSetEx: vi.fn(),
+}));
+
+vi.mock('../../../lib/database.js', () => ({
+  prisma: mockPrisma,
+}));
+
+vi.mock('../../../lib/redis.js', () => mockRedis);
+```
+
+### ✅ Do: Set Up Transaction Mocks in beforeEach
+
+**Pattern:** Configure `$transaction` mock in `beforeEach()` to ensure fresh state.
+
+```typescript
+describe('Betting Services', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Set up $transaction to execute callback with mockPrisma
+    mockPrisma.$transaction.mockImplementation(async (callback: any) => {
+      return callback(mockPrisma);
+    });
+  });
+});
+```
+
+### Testing Best Practices
+
+1. **One test file per service/controller** - Keep tests organized by feature
+2. **Use descriptive test names** - "should return 1000 credits for day 1" not "test 1"
+3. **AAA Pattern** - Arrange, Act, Assert
+4. **Mock external dependencies** - Database, Redis, external APIs
+5. **Test edge cases** - Invalid input, error conditions, boundary values
+6. **Clean up in beforeEach** - Use `vi.clearAllMocks()` to reset state
+7. **Import services AFTER mocks** - Even though Vitest hoists, it's clearer
+
+### Common Testing Patterns
+
+#### Testing Services with Prisma
+```typescript
+const mockPrisma = vi.hoisted(() => ({
+  user: { findUnique: vi.fn(), create: vi.fn() },
+}));
+
+vi.mock('../../../lib/database.js', () => ({ prisma: mockPrisma }));
+
+import * as service from '../service.js';
+
+it('should create user', async () => {
+  mockPrisma.user.findUnique.mockResolvedValue(null);
+  mockPrisma.user.create.mockResolvedValue({ id: 'user-1' });
+  
+  await service.createUser({ email: 'test@example.com' });
+  
+  expect(mockPrisma.user.create).toHaveBeenCalled();
+});
+```
+
+#### Testing Controllers with Services
+```typescript
+vi.mock('../service.js');
+
+import * as controller from '../controller.js';
+import * as service from '../service.js';
+
+it('should call service', async () => {
+  vi.mocked(service.createUser).mockResolvedValue({ id: 'user-1' });
+  
+  await controller.createUserHandler(mockRequest, mockReply);
+  
+  expect(service.createUser).toHaveBeenCalled();
+});
+```
+
+### Lessons Learned from Mock Hoisting Issues
+
+1. **Vitest hoists `vi.mock()` calls** - They execute before any code runs
+2. **Use `vi.hoisted()` for variables needed in mocks** - Ensures proper hoisting
+3. **No imports inside mock factories** - Keep factories self-contained
+4. **Mock objects must be hoisted** - Regular variables won't work
+5. **Test isolation is critical** - Each test should be independent

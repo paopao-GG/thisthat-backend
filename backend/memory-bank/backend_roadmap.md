@@ -1,8 +1,8 @@
 # Backend Development Roadmap
 
 **Project:** THISTHAT Backend API (V1 Only)
-**Status:** Phase 1-5 Complete ✅ | Phase 6 Pending
-**Last Updated:** 2025-01-XX (Memory Bank Update - Economy & Betting Complete)
+**Status:** ✅ V1 COMPLETE - All Critical Features Implemented
+**Last Updated:** 2025-01-XX (V1 Completion - Market Resolution, Leaderboards, Transactions, Auth Complete)
 
 ---
 
@@ -807,30 +807,32 @@ model RefreshToken {
 - [x] Store expected_payout on bet creation ✅
 - [ ] Unit tests for various odds ⏳
 
-#### 6.6 Market Resolution
-- [ ] Create market resolution service
-- [ ] Fetch resolution from Polymarket
-- [ ] Update market status to 'closed'
-- [ ] Set market.resolution ('this' or 'that')
-- [ ] Trigger payout processing
-- [ ] Unit tests
+#### 6.6 Market Resolution ✅ COMPLETE
+- [x] Create market resolution service ✅
+- [x] Fetch resolution from Polymarket ✅
+- [x] Update market status to 'resolved' ✅
+- [x] Set market.resolution ('this' or 'that') ✅
+- [x] Trigger payout processing ✅
+- [x] Background job (runs every 1 minute) ✅
+- [ ] Unit tests ⏳
 
-#### 6.7 Bet Payout Processing
-- [ ] Query all pending bets for resolved market
-- [ ] For winning bets:
-  - [ ] Set status to 'won'
-  - [ ] Credit user balance with actual_payout
-  - [ ] Update user overall_pnl (+profit)
-  - [ ] Log credit transaction
-- [ ] For losing bets:
-  - [ ] Set status to 'lost'
-  - [ ] Update user overall_pnl (-amount)
-- [ ] For invalid resolutions:
-  - [ ] Set status to 'cancelled'
-  - [ ] Refund bet amount
-  - [ ] Log credit transaction
-- [ ] Batch processing for performance
-- [ ] Unit tests
+#### 6.7 Bet Payout Processing ✅ COMPLETE
+- [x] Query all pending bets for resolved market ✅
+- [x] For winning bets:
+  - [x] Set status to 'won' ✅
+  - [x] Credit user balance with actual_payout ✅
+  - [x] Update user overall_pnl (+profit) ✅
+  - [x] Log credit transaction ✅
+- [x] For losing bets:
+  - [x] Set status to 'lost' ✅
+  - [x] Update user overall_pnl (-amount) ✅
+- [x] For invalid resolutions:
+  - [x] Set status to 'cancelled' ✅
+  - [x] Refund bet amount ✅
+  - [x] Log credit transaction ✅
+- [x] Batch processing for performance ✅
+- [x] Atomic transactions ✅
+- [ ] Unit tests ⏳
 
 ### API Endpoints
 
@@ -846,56 +848,59 @@ model RefreshToken {
 - ✅ Frontend integration complete
 - ✅ Bets history displayed in ProfilePage
 - ✅ Credits update in real-time after betting
-- [ ] Bets are resolved correctly when markets close ⏳
-- [ ] Winning users receive payouts automatically ⏳
+- ✅ Bets are resolved correctly when markets close ✅
+- ✅ Winning users receive payouts automatically ✅
+- ✅ Market resolution job runs every 1 minute ✅
 - [ ] All endpoints have unit tests ⏳
 - [ ] Load testing passes with 100+ concurrent bets ⏳
 
 ---
 
-## Phase 7: Leaderboard Module
+## Phase 7: Leaderboard Module ✅ COMPLETE
 
 **Duration:** 2-3 days
-**Status:** ⏳ Not Started
+**Status:** ✅ 100% Complete (2025-01-XX)
 **Objective:** Implement PnL and volume leaderboards with Redis caching
 
 ### Tasks
 
-#### 7.1 PnL Leaderboard
-- [ ] GET /api/v1/leaderboard/pnl endpoint
-- [ ] Query top 100 users by overall_pnl DESC
-- [ ] Cache results in Redis (TTL: 5 min)
-- [ ] Return: rank, username, PnL, volume
-- [ ] Unit tests
+#### 7.1 PnL Leaderboard ✅ COMPLETE
+- [x] GET /api/v1/leaderboard/pnl endpoint ✅
+- [x] Query top 100 users by overall_pnl DESC ✅
+- [x] Cache results in Redis (TTL: 5 min) ✅
+- [x] Return: rank, username, PnL, volume ✅
+- [x] Frontend integration with user ranking snackbar ✅
+- [ ] Unit tests ⏳
 
-#### 7.2 Volume Leaderboard
-- [ ] GET /api/v1/leaderboard/volume endpoint
-- [ ] Query top 100 users by total_volume DESC
-- [ ] Cache results in Redis (TTL: 5 min)
-- [ ] Return: rank, username, volume, PnL
-- [ ] Unit tests
+#### 7.2 Volume Leaderboard ✅ COMPLETE
+- [x] GET /api/v1/leaderboard/volume endpoint ✅
+- [x] Query top 100 users by total_volume DESC ✅
+- [x] Cache results in Redis (TTL: 5 min) ✅
+- [x] Return: rank, username, volume, PnL ✅
+- [x] Frontend integration ✅
+- [ ] Unit tests ⏳
 
-#### 7.3 Ranking Calculation
-- [ ] Create background job (runs every 15 min)
-- [ ] Calculate rank_by_pnl for all users
-- [ ] Calculate rank_by_volume for all users
-- [ ] Update users table
-- [ ] Invalidate Redis cache
-- [ ] Unit tests
+#### 7.3 Ranking Calculation ✅ COMPLETE
+- [x] Create background job (runs every 15 min) ✅
+- [x] Calculate rank_by_pnl for all users ✅
+- [x] Calculate rank_by_volume for all users ✅
+- [x] Update users table ✅
+- [x] Invalidate Redis cache ✅
+- [x] GET /api/v1/leaderboard/me endpoint (user's ranking) ✅
+- [ ] Unit tests ⏳
 
-#### 7.4 Redis Sorted Sets
-- [ ] Implement ZADD for user scores
-- [ ] Implement ZREVRANGE for top 100
-- [ ] Implement ZRANK for user position
-- [ ] Test sorted set operations
-- [ ] Unit tests
+#### 7.4 Redis Caching ✅ COMPLETE
+- [x] Redis connection configured ✅
+- [x] Graceful fallback (works without Redis) ✅
+- [x] Cache leaderboard results ✅
+- [x] Cache invalidation on ranking updates ✅
 
-#### 7.5 Performance Optimization
-- [ ] Index users.overall_pnl
-- [ ] Index users.total_volume
-- [ ] Test with 10,000+ users
-- [ ] Ensure queries complete in <100ms
-- [ ] Load testing
+#### 7.5 Performance Optimization ✅ COMPLETE
+- [x] Index users.overall_pnl ✅ (in schema)
+- [x] Index users.total_volume ✅ (in schema)
+- [x] Redis caching reduces DB load ✅
+- [ ] Test with 10,000+ users ⏳
+- [ ] Load testing ⏳
 
 ### API Endpoints
 
@@ -907,9 +912,13 @@ model RefreshToken {
 - ✅ Leaderboards return top 100 users
 - ✅ Rankings update every 15 minutes
 - ✅ Redis caching reduces DB load
-- ✅ Queries complete in <100ms (p95)
-- ✅ Handles 10,000+ users efficiently
-- ✅ All endpoints have unit tests
+- ✅ User ranking endpoint implemented
+- ✅ Frontend shows user ranking in snackbar
+- ✅ User row highlighted in leaderboard
+- ✅ Handles graceful Redis fallback
+- [ ] Queries complete in <100ms (p95) - Needs load testing
+- [ ] Handles 10,000+ users efficiently - Needs load testing
+- [ ] All endpoints have unit tests ⏳
 
 ---
 
@@ -1085,11 +1094,11 @@ model RefreshToken {
 | **Phase 4: Economy System** | 4-5 days | ✅ Complete | 2025-01-XX | 2025-01-XX |
 | **Phase 5: MongoDB Sync** | 1-2 days | ✅ Complete | 2025-01-XX | 2025-01-XX |
 | **Phase 6: Betting Module** | 4-5 days | ✅ Complete | 2025-01-XX | 2025-01-XX |
-| **Phase 7: Leaderboards** | 2-3 days | ⏳ Not Started | TBD | TBD |
-| **Phase 8: Market Resolution** | 3-4 days | ⏳ Not Started | TBD | TBD |
+| **Phase 7: Leaderboards** | 2-3 days | ✅ Complete | 2025-01-XX | 2025-01-XX |
+| **Phase 8: Market Resolution** | 3-4 days | ✅ Complete | 2025-01-XX | 2025-01-XX |
 | **Phase 9: Testing** | 3-4 days | ⏳ Not Started | TBD | TBD |
 | **Phase 10: Deployment** | 2-3 days | ⏳ Not Started | TBD | TBD |
-| **Total** | **25-35 days** | **~45% Complete** | 2025-11-18 | TBD |
+| **Total** | **25-35 days** | **✅ V1 Complete** | 2025-11-18 | 2025-01-XX |
 
 ---
 
@@ -1150,13 +1159,15 @@ These features are planned for V2/V3 and should **NOT** be implemented during V1
 
 ---
 
-**Last Updated:** 2025-01-XX (Memory Bank Update - Economy & Betting Complete)
-**Current Phase:** Phase 1-6 ✅ Complete, Phase 7 (Leaderboards) ⏳ Pending
-**Next Milestone:** Implement Leaderboard Module (Phase 7)
+**Last Updated:** 2025-01-XX (V1 COMPLETE)
+**Current Phase:** ✅ V1 COMPLETE - All Critical Features Implemented
+**Next Milestone:** Testing & Production Deployment
 **Phase 1 Testing:** ✅ 116 tests, 97%+ coverage
 **Recent Achievements:**
-- ✅ User Module complete
-- ✅ Betting Module complete (atomic transactions, payout calculation)
-- ✅ Economy System complete (daily credits, stock market, transaction signing)
-- ✅ MongoDB ↔ PostgreSQL sync complete
-- ✅ Frontend integration complete (daily rewards, bets history, stock market)
+- ✅ Market Resolution System complete (automatic payouts)
+- ✅ Leaderboard System complete (PnL & Volume rankings, user ranking snackbar)
+- ✅ Daily Credits PRD-aligned (1000→1500→2000... up to 10000)
+- ✅ Credit Transactions endpoint complete
+- ✅ Auth Refresh & Logout complete
+- ✅ Redis caching with graceful fallback
+- ✅ Frontend leaderboard with user ranking display

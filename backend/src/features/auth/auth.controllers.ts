@@ -118,3 +118,68 @@ export async function getMeHandler(request: FastifyRequest, reply: FastifyReply)
     });
   }
 }
+
+/**
+ * Refresh access token
+ */
+export async function refreshHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const { refreshToken } = request.body as { refreshToken?: string };
+    
+    if (!refreshToken) {
+      return reply.status(400).send({
+        success: false,
+        error: 'Refresh token is required',
+      });
+    }
+
+    const result = await authService.refreshAccessToken(refreshToken, request.server.jwt);
+
+    return reply.send({
+      success: true,
+      accessToken: result.accessToken,
+    });
+  } catch (error: any) {
+    if (error.message === 'Invalid or expired refresh token') {
+      return reply.status(401).send({
+        success: false,
+        error: error.message,
+      });
+    }
+
+    request.log.error({ error, stack: error.stack }, 'Refresh token error');
+    return reply.status(500).send({
+      success: false,
+      error: 'Failed to refresh token',
+    });
+  }
+}
+
+/**
+ * Logout user
+ */
+export async function logoutHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const { refreshToken } = request.body as { refreshToken?: string };
+    
+    if (!refreshToken) {
+      return reply.status(400).send({
+        success: false,
+        error: 'Refresh token is required',
+      });
+    }
+
+    await authService.logoutUser(refreshToken);
+
+    return reply.send({
+      success: true,
+      message: 'Logged out successfully',
+    });
+  } catch (error: any) {
+    request.log.error({ error, stack: error.stack }, 'Logout error');
+    return reply.status(500).send({
+      success: false,
+      error: 'Failed to logout',
+    });
+  }
+}

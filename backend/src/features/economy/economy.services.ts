@@ -2,14 +2,24 @@ import { prisma } from '../../lib/database.js';
 import { generateTransactionHash } from '../../lib/transaction-signer.js';
 import type { BuyStockInput, SellStockInput } from './economy.models.js';
 
-const DAILY_CREDIT_BASE = 100; // Base daily credit allocation
-const CONSECUTIVE_DAY_BONUS = 10; // Bonus credits per consecutive day
+const STARTING_DAILY_CREDITS = 1000; // Starting daily credit allocation (Day 1)
+const DAILY_INCREMENT = 500; // Increment per consecutive day
+const MAX_DAILY_CREDITS = 10000; // Maximum daily credits (reached at day 18)
+const MAX_STREAK_DAYS = 18; // Days to reach max credits
 
 /**
  * Calculate daily credit allocation based on consecutive days
+ * PRD: Starting from 1000 credits up to 1500, 2000, 2500... until max of 10000 (18-day streak)
  */
 export function calculateDailyCredits(consecutiveDays: number): number {
-  return DAILY_CREDIT_BASE + (consecutiveDays * CONSECUTIVE_DAY_BONUS);
+  // Cap at max streak days
+  const cappedDays = Math.min(consecutiveDays, MAX_STREAK_DAYS);
+  
+  // Calculate: 1000 + (days - 1) * 500, capped at 10000
+  const credits = STARTING_DAILY_CREDITS + (cappedDays - 1) * DAILY_INCREMENT;
+  
+  // Ensure we don't exceed max
+  return Math.min(credits, MAX_DAILY_CREDITS);
 }
 
 /**
@@ -33,11 +43,12 @@ export async function processDailyCreditAllocation(userId: string): Promise<{
   const lastRewardAt = user.lastDailyRewardAt;
   const lastLoginAt = user.lastLoginAt;
 
-  // Check if user can claim daily reward (5 minutes since last claim for testing)
+  // Check if user can claim daily reward (24 hours since last claim)
+  // PRD: Credit claim happens every 00:00 UTC
   if (lastRewardAt) {
-    const minutesSinceLastReward = (now.getTime() - lastRewardAt.getTime()) / (1000 * 60);
-    if (minutesSinceLastReward < 5) {
-      const nextAvailable = new Date(lastRewardAt.getTime() + 5 * 60 * 1000);
+    const hoursSinceLastReward = (now.getTime() - lastRewardAt.getTime()) / (1000 * 60 * 60);
+    if (hoursSinceLastReward < 24) {
+      const nextAvailable = new Date(lastRewardAt.getTime() + 24 * 60 * 60 * 1000);
       return {
         creditsAwarded: 0,
         consecutiveDays: user.consecutiveDaysOnline,

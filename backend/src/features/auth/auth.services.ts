@@ -256,3 +256,68 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
     consecutiveDaysOnline: user.consecutiveDaysOnline,
   };
 }
+
+/**
+ * Refresh access token using refresh token
+ */
+export async function refreshAccessToken(
+  refreshToken: string,
+  jwt: FastifyJWT['jwt']
+): Promise<{ accessToken: string }> {
+  // Find refresh token in database
+  const refreshTokens = await prisma.refreshToken.findMany({
+    where: {
+      expiresAt: { gt: new Date() },
+    },
+    include: {
+      user: true,
+    },
+  });
+
+  // Find matching token by comparing hashes
+  let matchedToken = null;
+  for (const token of refreshTokens) {
+    const isValid = await verifyPassword(refreshToken, token.tokenHash);
+    if (isValid) {
+      matchedToken = token;
+      break;
+    }
+  }
+
+  if (!matchedToken) {
+    throw new Error('Invalid or expired refresh token');
+  }
+
+  // Generate new access token
+  const accessToken = jwt.sign(
+    { userId: matchedToken.user.id, email: matchedToken.user.email },
+    { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m' }
+  );
+
+  return { accessToken };
+}
+
+/**
+ * Logout user by invalidating refresh token
+ */
+export async function logoutUser(refreshToken: string): Promise<void> {
+  // Find and delete refresh token
+  const refreshTokens = await prisma.refreshToken.findMany({
+    where: {
+      expiresAt: { gt: new Date() },
+    },
+  });
+
+  // Find matching token and delete it
+  for (const token of refreshTokens) {
+    const isValid = await verifyPassword(refreshToken, token.tokenHash);
+    if (isValid) {
+      await prisma.refreshToken.delete({
+        where: { id: token.id },
+      });
+      return;
+    }
+  }
+
+  // Token not found, but don't throw error (idempotent)
+}

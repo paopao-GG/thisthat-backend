@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { Search, ChevronDown, Medal } from 'lucide-react';
-import type { LeaderboardEntry } from '../../shared/types';
+import React, { useState, useEffect } from 'react';
+import { Search, ChevronDown, Medal, Trophy } from 'lucide-react';
+import { leaderboardService, type LeaderboardEntry } from '../../shared/services/leaderboardService';
+import { useAuth } from '../../shared/contexts/AuthContext';
 
 // Mock data - replace with actual API calls
 const mockLeaderboard: LeaderboardEntry[] = [
@@ -59,11 +60,65 @@ const mockLeaderboard: LeaderboardEntry[] = [
 const CATEGORIES = ['All', 'Crypto', 'Politics', 'Sports', 'Entertainment', 'Technology', 'Finance', 'Other'];
 
 const LeaderboardPage: React.FC = () => {
+  const { user } = useAuth();
+  const [leaderboardType, setLeaderboardType] = useState<'pnl' | 'volume'>('pnl');
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [userRanking, setUserRanking] = useState<{
+    rank: number | null;
+    totalUsers: number;
+    overallPnL: number;
+    totalVolume: number;
+  } | null>(null);
   const [timeFilter, setTimeFilter] = useState<'today' | 'weekly' | 'monthly' | 'all'>('monthly');
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortBy, setSortBy] = useState<'volume'>('volume');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  // Fetch leaderboard data
+  useEffect(() => {
+    const fetchLeaderboard = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const response = leaderboardType === 'pnl'
+          ? await leaderboardService.getPnLLeaderboard({ limit: 100 })
+          : await leaderboardService.getVolumeLeaderboard({ limit: 100 });
+
+        if (response.success) {
+          setLeaderboard(response.leaderboard);
+        }
+      } catch (err) {
+        console.error('Error fetching leaderboard:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load leaderboard');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLeaderboard();
+  }, [leaderboardType]);
+
+  // Fetch user's ranking
+  useEffect(() => {
+    const fetchUserRanking = async () => {
+      if (!user) return;
+
+      try {
+        const response = await leaderboardService.getUserRanking(leaderboardType);
+        if (response.success) {
+          setUserRanking(response.ranking);
+        }
+      } catch (err) {
+        console.error('Error fetching user ranking:', err);
+      }
+    };
+
+    fetchUserRanking();
+  }, [user, leaderboardType]);
 
   const handleSort = (column: 'volume') => {
     if (sortBy === column) {
@@ -76,17 +131,21 @@ const LeaderboardPage: React.FC = () => {
 
   // Filter and sort leaderboard entries
   const filteredAndSortedLeaderboard = React.useMemo(() => {
-    let filtered = mockLeaderboard.filter((entry) => {
+    let filtered = leaderboard.filter((entry) => {
       if (searchQuery) {
-        return entry.username.toLowerCase().includes(searchQuery.toLowerCase());
+        return entry.user.username.toLowerCase().includes(searchQuery.toLowerCase());
       }
       return true;
     });
 
     // Sort the filtered results
     filtered = [...filtered].sort((a, b) => {
-      const aValue = a.volume;
-      const bValue = b.volume;
+      const aValue = leaderboardType === 'pnl' 
+        ? (a.overallPnL || 0) 
+        : (a.totalVolume || 0);
+      const bValue = leaderboardType === 'pnl'
+        ? (b.overallPnL || 0)
+        : (b.totalVolume || 0);
       
       if (sortOrder === 'desc') {
         return bValue - aValue;
@@ -96,11 +155,79 @@ const LeaderboardPage: React.FC = () => {
     });
 
     return filtered;
-  }, [searchQuery, sortOrder]);
+  }, [leaderboard, searchQuery, sortOrder, leaderboardType]);
+
+  // Format ranking display text
+  const getRankingText = () => {
+    if (!userRanking || userRanking.rank === null) {
+      return 'Not ranked yet';
+    }
+    const rank = userRanking.rank;
+    const total = userRanking.totalUsers;
+    const value = leaderboardType === 'pnl' 
+      ? userRanking.overallPnL.toFixed(2)
+      : userRanking.totalVolume.toLocaleString();
+    const label = leaderboardType === 'pnl' ? 'PnL' : 'Volume';
+    
+    return `Rank #${rank} of ${total} • ${label}: ${value}`;
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-full p-8">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p className="text-white/60">Loading leaderboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-full p-8">
+        <div className="text-center">
+          <p className="text-red-400 mb-4">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-4 sm:p-6 max-w-6xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-6xl mx-auto pb-24">
       <div className="mb-6">
+        {/* Leaderboard Type Toggle */}
+        <div className="flex gap-2 p-1 bg-white/5 rounded-md mb-4">
+          <button
+            className={`flex-1 py-3 px-4 text-sm transition-all font-semibold rounded ${
+              leaderboardType === 'pnl'
+                ? 'text-white'
+                : 'text-white/60 bg-white/5 hover:text-white/80'
+            }`}
+            style={leaderboardType === 'pnl' ? { background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' } : {}}
+            onClick={() => setLeaderboardType('pnl')}
+          >
+            PnL Leaderboard
+          </button>
+          <button
+            className={`flex-1 py-3 px-4 text-sm transition-all font-semibold rounded ${
+              leaderboardType === 'volume'
+                ? 'text-white'
+                : 'text-white/60 bg-white/5 hover:text-white/80'
+            }`}
+            style={leaderboardType === 'volume' ? { background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' } : {}}
+            onClick={() => setLeaderboardType('volume')}
+          >
+            Volume Leaderboard
+          </button>
+        </div>
+
         <div className="flex gap-1 sm:gap-2 p-1 bg-white/5 rounded-md mb-4">
           <button
             className={`flex-1 py-3 px-2 sm:px-4 text-xs sm:text-sm transition-all font-semibold rounded ${
@@ -225,18 +352,29 @@ const LeaderboardPage: React.FC = () => {
               };
 
               // Truncate username
-              const displayUsername = entry.username.length > 6 
-                ? entry.username.substring(0, 5) + '...' 
-                : entry.username;
+              const displayUsername = entry.user.username.length > 6 
+                ? entry.user.username.substring(0, 5) + '...' 
+                : entry.user.username;
+
+              // Check if this is the current user
+              const isCurrentUser = user && entry.user.id === user.id;
+
+              const displayValue = leaderboardType === 'pnl'
+                ? (entry.overallPnL || 0).toFixed(2)
+                : (entry.totalVolume || 0).toLocaleString();
 
               return (
                 <div
-                  key={entry.userId}
-                  className="flex items-center justify-between px-4 py-4 border-b border-white/10 transition-all hover:bg-white/5"
+                  key={entry.user.id}
+                  className={`flex items-center justify-between px-4 py-4 border-b transition-all hover:bg-white/5 ${
+                    isCurrentUser 
+                      ? 'bg-purple-500/20 border-purple-500/50' 
+                      : 'border-white/10'
+                  }`}
                 >
                   <div className="flex items-center gap-4 flex-1 min-w-0">
                     <div className="w-8 text-left flex-shrink-0">
-                      <span className="text-sm text-white font-medium">
+                      <span className={`text-sm font-medium ${isCurrentUser ? 'text-purple-300' : 'text-white'}`}>
                         {entry.rank}
                       </span>
                     </div>
@@ -244,10 +382,12 @@ const LeaderboardPage: React.FC = () => {
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       <div className="relative flex-shrink-0">
                         <div
-                          className="w-10 h-10 flex items-center justify-center text-white rounded-full"
+                          className={`w-10 h-10 flex items-center justify-center text-white rounded-full ${
+                            isCurrentUser ? 'ring-2 ring-purple-400' : ''
+                          }`}
                           style={{ backgroundColor: avatarColor }}
                         >
-                          <span className="text-base font-bold">{entry.username[0]}</span>
+                          <span className="text-base font-bold">{entry.user.username[0]}</span>
                         </div>
                         {entry.rank <= 3 && (
                           <div 
@@ -258,20 +398,16 @@ const LeaderboardPage: React.FC = () => {
                           </div>
                         )}
                       </div>
-                      <span className="text-sm font-medium text-white truncate">
+                      <span className={`text-sm font-medium truncate ${isCurrentUser ? 'text-purple-300' : 'text-white'}`}>
                         {displayUsername}
+                        {isCurrentUser && <span className="ml-2 text-xs">(You)</span>}
                       </span>
                     </div>
                   </div>
                   <div className="flex items-center gap-8 sm:gap-12 flex-shrink-0">
                     <div className="text-right min-w-[100px] sm:min-w-[120px]">
-                      <span className="text-sm text-white">
-                        {entry.volume.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="text-right min-w-[80px] sm:min-w-[100px]">
-                      <span className="text-sm font-medium text-amber-400">
-                        {entry.tokenAllocation.toLocaleString()}
+                      <span className={`text-sm ${isCurrentUser ? 'text-purple-300 font-semibold' : 'text-white'}`}>
+                        {displayValue}
                       </span>
                     </div>
                   </div>
@@ -281,6 +417,19 @@ const LeaderboardPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* User Ranking Snackbar */}
+      {user && userRanking && (
+        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50 animate-slideUp">
+          <div className="bg-gradient-to-r from-purple-600 to-purple-800 text-white px-6 py-4 rounded-lg shadow-lg flex items-center gap-3 min-w-[300px] max-w-[90vw] border border-purple-400/30">
+            <Trophy className="flex-shrink-0" size={20} />
+            <div className="flex-1">
+              <div className="text-sm font-semibold">Your Ranking</div>
+              <div className="text-xs text-purple-100 mt-0.5">{getRankingText()}</div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -18,7 +18,7 @@ Key Goals:
 
 \- Swipe up/down \= next/previous market
 
-\- Single market card by default but we’re not limited to having one more than one (best reference: [https://polymarket.com/](https://polymarket.com/))
+\- Single market card by default but we’re not limited to having one more than one
 
 \- Credits for V1, wallet/USDC for V2
 
@@ -40,7 +40,13 @@ Components:
 
 Credits (V1):
 
-\- Earned via daily login
+\- Earned via daily claims or through referrals
+
+	\- Each successful claim per day increases the daily log-in streak of a user. When this happens, an additional 500 credits can be claimed. Starting from 1000 credits up to 1500, 2000, 2500, and so on until a max of 10000 credit claims (18-day streak).
+
+	\- Once a user is at the max of 10000 credit claims, it will no longer increase but instead will be kept until the streak is over. Hence, will reset back to 1000 credit claims per day.
+
+	\- The credit claim happens every 00:00 UTC.
 
 \- Used for all bets in V1
 
@@ -163,8 +169,6 @@ Mitigations:
 \- Editorial curation
 
 \- Credits-first launch
-
-# 
 
 # **Section 9: Success Metrics & KPIs**
 
