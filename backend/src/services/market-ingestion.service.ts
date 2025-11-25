@@ -11,6 +11,7 @@
 
 import { prisma } from '../lib/database.js';
 import { getPolymarketClient, type PolymarketMarket } from '../lib/polymarket-client.js';
+import { retryWithBackoff } from '../lib/retry.js';
 
 export interface MarketIngestionResult {
   total: number;
@@ -95,11 +96,20 @@ export async function ingestMarketsFromPolymarket(options?: {
   try {
     console.log('[Market Ingestion] Fetching markets from Polymarket...');
 
-    const markets = await client.getMarkets({
-      closed: !activeOnly, // false = active markets
-      limit,
-      offset: 0,
-    });
+    // Retry API call with exponential backoff
+    const markets = await retryWithBackoff(
+      () =>
+        client.getMarkets({
+          closed: !activeOnly, // false = active markets
+          limit,
+          offset: 0,
+        }),
+      {
+        maxRetries: 3,
+        initialDelayMs: 1000,
+        maxDelayMs: 10000,
+      }
+    );
 
     if (!Array.isArray(markets)) {
       console.error('[Market Ingestion] Invalid response from Polymarket API');
@@ -110,8 +120,9 @@ export async function ingestMarketsFromPolymarket(options?: {
     console.log(`[Market Ingestion] Fetched ${markets.length} markets`);
 
     for (const market of markets) {
+      let staticData: any = null;
       try {
-        const staticData = extractStaticData(market);
+        staticData = extractStaticData(market);
 
         // Skip if missing required fields
         if (!staticData.polymarketId || !staticData.title) {
@@ -150,16 +161,24 @@ export async function ingestMarketsFromPolymarket(options?: {
           result.created++;
         }
       } catch (error: any) {
-        console.error(`[Market Ingestion] Error processing market:`, error.message);
+        const marketId = staticData?.polymarketId || market?.conditionId || 'unknown';
+        console.error(
+          `[Market Ingestion] Error processing market ${marketId}:`,
+          error.message
+        );
         result.errors++;
+        // Continue processing other markets even if one fails
       }
     }
 
-    console.log(`[Market Ingestion] Complete: ${result.created} created, ${result.updated} updated, ${result.skipped} skipped, ${result.errors} errors`);
+    console.log(
+      `[Market Ingestion] Complete: ${result.created} created, ${result.updated} updated, ${result.skipped} skipped, ${result.errors} errors`
+    );
     return result;
   } catch (error: any) {
     console.error('[Market Ingestion] Fatal error:', error.message);
-    throw error;
+    // Return partial result instead of throwing to allow job to continue
+    return result;
   }
 }
 

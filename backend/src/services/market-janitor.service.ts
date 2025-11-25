@@ -11,6 +11,7 @@
 import { prisma } from '../lib/database.js';
 import { getPolymarketClient } from '../lib/polymarket-client.js';
 import { settlePositionsForMarket } from '../features/positions/positions.services.js';
+import { retryWithBackoffSilent } from '../lib/retry.js';
 
 export interface JanitorResult {
   checkedMarkets: number;
@@ -62,7 +63,15 @@ async function checkPolymarketResolution(polymarketId: string): Promise<{
   const client = getPolymarketClient();
 
   try {
-    const market = await client.getMarket(polymarketId);
+    // Retry API call with exponential backoff (silent - returns null on failure)
+    const market = await retryWithBackoffSilent(
+      () => client.getMarket(polymarketId),
+      {
+        maxRetries: 3,
+        initialDelayMs: 1000,
+        maxDelayMs: 10000,
+      }
+    );
 
     if (!market) {
       return { resolved: false, resolution: null };
@@ -176,23 +185,32 @@ async function processMarketPayouts(
             });
 
             // Credit winnings
+            const payoutAmount = typeof bet.potentialPayout === 'number' 
+              ? bet.potentialPayout 
+              : Number(bet.potentialPayout);
+            const betAmount = typeof bet.amount === 'number' 
+              ? bet.amount 
+              : Number(bet.amount);
             await tx.user.update({
               where: { id: bet.userId },
               data: {
-                creditBalance: { increment: bet.potentialPayout },
-                availableCredits: { increment: bet.potentialPayout },
-                overallPnL: { increment: bet.potentialPayout.sub(bet.amount) },
+                creditBalance: { increment: payoutAmount },
+                availableCredits: { increment: payoutAmount },
+                overallPnL: { increment: payoutAmount - betAmount },
               },
             });
 
             // Log transaction
+            const balanceAfter = typeof bet.user.creditBalance === 'number'
+              ? bet.user.creditBalance + payoutAmount
+              : Number(bet.user.creditBalance) + payoutAmount;
             await tx.creditTransaction.create({
               data: {
                 userId: bet.userId,
-                amount: bet.potentialPayout,
+                amount: payoutAmount,
                 transactionType: 'bet_payout',
                 referenceId: bet.id,
-                balanceAfter: bet.user.creditBalance.add(bet.potentialPayout),
+                balanceAfter,
               },
             });
           });

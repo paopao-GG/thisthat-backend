@@ -29,6 +29,12 @@ vi.mock('../../../lib/database.js', () => ({
   prisma: mockPrisma,
 }));
 
+// Mock markets service for fetchLivePriceData (hoisted)
+const mockFetchLivePriceData = vi.hoisted(() => vi.fn());
+vi.mock('../../markets/markets.services.js', () => ({
+  fetchLivePriceData: mockFetchLivePriceData,
+}));
+
 // Import service AFTER mocks
 import * as bettingService from '../betting.services.js';
 
@@ -39,6 +45,17 @@ describe('Betting Services', () => {
     // Mock $transaction to execute callback immediately
     mockPrisma.$transaction.mockImplementation(async (callback: any) => {
       return callback(mockPrisma);
+    });
+    // Reset and set default mock for fetchLivePriceData - returns odds matching mockMarket
+    mockFetchLivePriceData.mockReset();
+    mockFetchLivePriceData.mockResolvedValue({
+      polymarketId: 'condition-123',
+      thisOdds: 0.65,
+      thatOdds: 0.35,
+      liquidity: 1000,
+      volume: 5000,
+      volume24hr: 2000,
+      acceptingOrders: true,
     });
   });
 
@@ -97,7 +114,8 @@ describe('Betting Services', () => {
 
       expect(result.bet).toBeDefined();
       expect(result.newBalance).toBe(4900);
-      expect(result.potentialPayout).toBeCloseTo(100 / 0.65);
+      // Payout = amount / odds = 100 / 0.65 = 153.846...
+      expect(result.potentialPayout).toBeCloseTo(100 / 0.65, 2);
     });
 
     it('should throw error if user not found', async () => {
@@ -180,6 +198,17 @@ describe('Betting Services', () => {
     });
 
     it('should calculate payout correctly for THIS side', async () => {
+      // Mock fetchLivePriceData to return THIS odds
+      mockFetchLivePriceData.mockResolvedValueOnce({
+        polymarketId: 'condition-123',
+        thisOdds: 0.65,
+        thatOdds: 0.35,
+        liquidity: 1000,
+        volume: 5000,
+        volume24hr: 2000,
+        acceptingOrders: true,
+      });
+
       mockPrisma.user.findUnique.mockResolvedValue(mockUser as any);
       mockPrisma.market.findUnique.mockResolvedValue(mockMarket as any);
       mockPrisma.bet.create.mockResolvedValue({
@@ -195,10 +224,22 @@ describe('Betting Services', () => {
         amount: 100,
       });
 
-      expect(result.potentialPayout).toBeCloseTo(100 / 0.65);
+      // Payout = amount / odds = 100 / 0.65 = 153.846...
+      expect(result.potentialPayout).toBeCloseTo(100 / 0.65, 2);
     });
 
     it('should calculate payout correctly for THAT side', async () => {
+      // Mock fetchLivePriceData to return THAT odds (0.35)
+      mockFetchLivePriceData.mockResolvedValueOnce({
+        polymarketId: 'condition-123',
+        thisOdds: 0.65,
+        thatOdds: 0.35,
+        liquidity: 1000,
+        volume: 5000,
+        volume24hr: 2000,
+        acceptingOrders: true,
+      });
+
       mockPrisma.user.findUnique.mockResolvedValue(mockUser as any);
       mockPrisma.market.findUnique.mockResolvedValue(mockMarket as any);
       mockPrisma.bet.create.mockResolvedValue({
@@ -214,7 +255,8 @@ describe('Betting Services', () => {
         amount: 100,
       });
 
-      expect(result.potentialPayout).toBeCloseTo(100 / 0.35);
+      // Payout = amount / odds = 100 / 0.35 = 285.714...
+      expect(result.potentialPayout).toBeCloseTo(100 / 0.35, 2);
     });
   });
 

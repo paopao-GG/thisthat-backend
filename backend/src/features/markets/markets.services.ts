@@ -8,6 +8,7 @@
 
 import { prisma } from '../../lib/database.js';
 import { getPolymarketClient } from '../../lib/polymarket-client.js';
+import { retryWithBackoffSilent } from '../../lib/retry.js';
 
 export interface MarketStaticData {
   id: string;
@@ -166,7 +167,15 @@ export async function fetchLivePriceData(polymarketId: string): Promise<MarketLi
   const client = getPolymarketClient();
 
   try {
-    const market = await client.getMarket(polymarketId);
+    // Retry API call with exponential backoff (silent - returns null on failure)
+    const market = await retryWithBackoffSilent(
+      () => client.getMarket(polymarketId),
+      {
+        maxRetries: 2, // Fewer retries for client-facing API (faster failure)
+        initialDelayMs: 500,
+        maxDelayMs: 5000,
+      }
+    );
 
     if (!market) {
       return null;
@@ -202,7 +211,8 @@ export async function fetchLivePriceData(polymarketId: string): Promise<MarketLi
       acceptingOrders: market.accepting_orders ?? false,
     };
   } catch (error: any) {
-    console.error(`[Markets Service] Error fetching live data for ${polymarketId}:`, error.message);
+    // Error already logged by retryWithBackoffSilent
+    console.error(`[Markets Service] Failed to fetch live data for ${polymarketId} after retries`);
     return null;
   }
 }

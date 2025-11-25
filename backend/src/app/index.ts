@@ -60,8 +60,8 @@ fastify.get('/api/hello', async (request, reply) => {
   return { message: 'Hello from TypeScript Fastify!' };
 });
 
-// Register Phase 1 routes
-await fastify.register(marketDataRoutes, { prefix: '/api/v1/markets' });
+// Register Phase 1 routes (legacy MongoDB-based - kept for backward compatibility)
+await fastify.register(marketDataRoutes, { prefix: '/api/v1/markets/legacy' });
 await fastify.register(eventDataRoutes, { prefix: '/api/v1/events' });
 await fastify.register(eventMarketGroupRoutes, { prefix: '/api/v1/event-market-groups' });
 
@@ -86,8 +86,8 @@ await fastify.register(leaderboardRoutes, { prefix: '/api/v1/leaderboard' });
 // Register Transaction routes
 await fastify.register(transactionRoutes, { prefix: '/api/v1/transactions' });
 
-// Register new Markets routes (client-facing with lazy loading)
-await fastify.register(marketsRoutes, { prefix: '/api/v1/markets/v2' });
+// Register new Markets routes (client-facing with lazy loading - PostgreSQL + on-demand pricing)
+await fastify.register(marketsRoutes, { prefix: '/api/v1/markets' });
 
 // Register Position trading routes (buy/sell shares like Polymarket)
 await fastify.register(positionsRoutes, { prefix: '/api/v1/positions' });
