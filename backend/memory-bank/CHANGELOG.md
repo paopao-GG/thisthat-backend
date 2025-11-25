@@ -2,6 +2,34 @@
 
 All notable changes to the THISTHAT Backend project will be documented in this file.
 
+## [V1.0.2] - 2025-01-XX - Frontend Routing & Leaderboard Fixes
+
+### ✅ Added - Testing Routes
+- **Nested `/test` Routes for Testing**
+  - Added `/test/*` routes alongside original routes for testing purposes
+  - Original routes (`/play`, `/leaderboard`, etc.) still functional
+  - Both route sets available simultaneously
+  - Navigation updated to use `/test/*` paths
+  - Redirect from `/` to `/test` for easier testing access
+
+### 🔧 Fixed - Leaderboard Ranking Discrepancy
+- **Problem:** Snackbar showing incorrect ranking (#5) while user appears in top 3 in list
+  - Snackbar was using stored rankings (`rankByPnL`/`rankByVolume`) updated every 15 minutes
+  - Leaderboard list calculates ranks dynamically from sorted query results
+  - Stored rankings could be stale or out of sync
+  
+- **Solution:** Snackbar now uses dynamic ranking from leaderboard data
+  - Calculates user's rank from leaderboard array (matches list display)
+  - Falls back to stored ranking only if user not in top 100
+  - Ensures snackbar and list always show the same rank
+
+### 📊 Impact
+- **Frontend:** Both original and test routes available
+- **User Experience:** Leaderboard ranking now consistent between snackbar and list
+- **Testing:** Easier to test features under `/test/*` namespace
+
+---
+
 ## [V1.0.1] - 2025-01-XX - Unit Test Suite Complete
 
 ### ✅ Added - Comprehensive Unit Test Suite

@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/database.js';
 import type { PlaceBetInput, BetQueryInput } from './betting.models.js';
+import { fetchLivePriceData } from '../markets/markets.services.js';
 
 const MIN_BET_AMOUNT = 10;
 const MAX_BET_AMOUNT = 10000;
@@ -15,41 +16,66 @@ export async function placeBet(
   newBalance: number;
   potentialPayout: number;
 }> {
+  // Validate bet amount first
+  if (input.amount < MIN_BET_AMOUNT) {
+    throw new Error(`Minimum bet amount is ${MIN_BET_AMOUNT} credits`);
+  }
+  if (input.amount > MAX_BET_AMOUNT) {
+    throw new Error(`Maximum bet amount is ${MAX_BET_AMOUNT} credits`);
+  }
+
+  // Step 1: Find market (outside transaction to avoid long-running tx)
+  let market = await prisma.market.findUnique({
+    where: { polymarketId: input.marketId },
+  });
+
+  // If not found by polymarketId, try finding by UUID id
+  if (!market) {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (uuidRegex.test(input.marketId)) {
+      market = await prisma.market.findUnique({ where: { id: input.marketId } });
+    }
+  }
+
+  if (!market) throw new Error('Market not found');
+  if (market.status !== 'open') throw new Error('Market is not open');
+
+  // Check if market has expired
+  if (market.expiresAt && new Date() > market.expiresAt) {
+    throw new Error('Market has expired');
+  }
+
+  // Step 2: Fetch live odds from Polymarket API (outside transaction - external API call)
+  let odds: number;
+  if (market.polymarketId) {
+    console.log(`[Betting] Fetching live prices for market: ${market.title} (${market.polymarketId})`);
+    const liveData = await fetchLivePriceData(market.polymarketId);
+    if (!liveData) {
+      console.warn(`[Betting] Failed to fetch live prices for ${market.polymarketId}. Using fallback 50/50 odds. Market title: ${market.title}`);
+      // Fallback to 50/50 odds if Polymarket API fails
+      odds = 0.5;
+    } else {
+      odds = input.side === 'this' ? liveData.thisOdds : liveData.thatOdds;
+      console.log(`[Betting] Live odds fetched - THIS: ${liveData.thisOdds}, THAT: ${liveData.thatOdds}`);
+    }
+  } else {
+    // For non-Polymarket markets, use a default 50/50 odds
+    console.log(`[Betting] Non-Polymarket market, using default 50/50 odds`);
+    odds = 0.5;
+  }
+
+  if (odds <= 0 || odds > 1) {
+    throw new Error('Invalid odds');
+  }
+
+  // Calculate potential payout: betAmount / odds
+  const potentialPayout = input.amount / odds;
+
+  // Step 3: Execute database operations in transaction
   return await prisma.$transaction(async (tx) => {
-    // Get user
+    // Get user with fresh data
     const user = await tx.user.findUnique({ where: { id: userId } });
     if (!user) throw new Error('User not found');
-
-    // Try to find market by polymarketId (conditionId) first, then by UUID id
-    // This handles both MongoDB conditionIds and PostgreSQL UUIDs
-    let market = await tx.market.findUnique({ 
-      where: { polymarketId: input.marketId } 
-    });
-    
-    // If not found by polymarketId, try finding by UUID id
-    if (!market) {
-      // Only try UUID lookup if the string looks like a UUID
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (uuidRegex.test(input.marketId)) {
-        market = await tx.market.findUnique({ where: { id: input.marketId } });
-      }
-    }
-
-    if (!market) throw new Error('Market not found');
-    if (market.status !== 'open') throw new Error('Market is not open');
-    
-    // Check if market has expired
-    if (market.expiresAt && new Date() > market.expiresAt) {
-      throw new Error('Market has expired');
-    }
-
-    // Validate bet amount
-    if (input.amount < MIN_BET_AMOUNT) {
-      throw new Error(`Minimum bet amount is ${MIN_BET_AMOUNT} credits`);
-    }
-    if (input.amount > MAX_BET_AMOUNT) {
-      throw new Error(`Maximum bet amount is ${MAX_BET_AMOUNT} credits`);
-    }
 
     // Check available credits
     const availableCredits = Number(user.availableCredits);
@@ -57,24 +83,14 @@ export async function placeBet(
       throw new Error('Insufficient credits');
     }
 
-    // Get odds for selected side
-    const odds = input.side === 'this' ? Number(market.thisOdds) : Number(market.thatOdds);
-    if (odds <= 0 || odds > 1) {
-      throw new Error('Invalid odds');
-    }
-
-    // Calculate potential payout: betAmount / odds
-    const potentialPayout = input.amount / odds;
-
     const balanceBefore = availableCredits;
     const balanceAfter = balanceBefore - input.amount;
 
     // Create bet record
-    // Use the PostgreSQL market.id (UUID), not the input.marketId (conditionId)
     const bet = await tx.bet.create({
       data: {
         userId,
-        marketId: market.id, // Use the PostgreSQL market UUID, not conditionId
+        marketId: market.id,
         amount: input.amount,
         side: input.side,
         oddsAtBet: odds,
@@ -99,7 +115,7 @@ export async function placeBet(
       where: { id: userId },
       data: {
         availableCredits: balanceAfter,
-        creditBalance: balanceAfter, // Also update main balance
+        creditBalance: balanceAfter,
         expendedCredits: {
           increment: input.amount,
         },
@@ -113,7 +129,7 @@ export async function placeBet(
     await tx.creditTransaction.create({
       data: {
         userId,
-        amount: -input.amount, // Negative for debit
+        amount: -input.amount,
         transactionType: 'bet_placed',
         referenceId: bet.id,
         balanceAfter,

@@ -15,8 +15,12 @@ import { startDailyCreditsJob, stopDailyCreditsJob } from '../jobs/daily-credits
 import { startMarketSyncJob, stopMarketSyncJob } from '../jobs/market-sync.job.js';
 import { startMarketResolutionJob, stopMarketResolutionJob } from '../jobs/market-resolution.job.js';
 import { startLeaderboardUpdateJob, stopLeaderboardUpdateJob } from '../jobs/leaderboard-update.job.js';
+import { startMarketIngestionJob, stopMarketIngestionJob } from '../jobs/market-ingestion.job.js';
+import { startMarketJanitorJob, stopMarketJanitorJob } from '../jobs/market-janitor.job.js';
 import leaderboardRoutes from '../features/leaderboard/leaderboard.routes.js';
 import transactionRoutes from '../features/transactions/transactions.routes.js';
+import { marketsRoutes } from '../features/markets/markets.routes.js';
+import { positionsRoutes } from '../features/positions/positions.routes.js';
 import redis from '../lib/redis.js';
 
 // Load environment variables
@@ -82,6 +86,12 @@ await fastify.register(leaderboardRoutes, { prefix: '/api/v1/leaderboard' });
 // Register Transaction routes
 await fastify.register(transactionRoutes, { prefix: '/api/v1/transactions' });
 
+// Register new Markets routes (client-facing with lazy loading)
+await fastify.register(marketsRoutes, { prefix: '/api/v1/markets/v2' });
+
+// Register Position trading routes (buy/sell shares like Polymarket)
+await fastify.register(positionsRoutes, { prefix: '/api/v1/positions' });
+
 // Error handling
 fastify.setErrorHandler((error, request, reply) => {
   fastify.log.error(error);
@@ -116,6 +126,8 @@ const start = async () => {
     startMarketSyncJob();
     startMarketResolutionJob();
     startLeaderboardUpdateJob();
+    startMarketIngestionJob();  // New: Fetch & save static market data (no prices)
+    startMarketJanitorJob();    // New: Clean up stale/overdue markets
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);
@@ -132,6 +144,8 @@ const gracefulShutdown = async () => {
     stopMarketSyncJob();
     stopMarketResolutionJob();
     stopLeaderboardUpdateJob();
+    stopMarketIngestionJob();
+    stopMarketJanitorJob();
     
     // Close Redis connection
     try {

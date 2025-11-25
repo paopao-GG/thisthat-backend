@@ -147,8 +147,12 @@ export class PolymarketClient {
     try {
       const response = await this.client.get(`/markets/${conditionId}`);
       return response.data || null;
-    } catch (error) {
-      console.error(`Error fetching market ${conditionId}:`, error);
+    } catch (error: any) {
+      if (error.response) {
+        console.error(`[PolymarketClient] Error fetching market ${conditionId}: ${error.response.status} - ${JSON.stringify(error.response.data)}`);
+      } else {
+        console.error(`[PolymarketClient] Error fetching market ${conditionId}:`, error.message);
+      }
       return null;
     }
   }

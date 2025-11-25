@@ -44,6 +44,11 @@ As of 2025-01-XX, V1 is **COMPLETE**:
 - `prisma/schema.prisma` - Database schema defined (6 tables)
 
 **Frontend Code - Working:**
+- `frontend/src/App.tsx` - React Router setup ✅
+  - **Nested `/test/*` routes added for testing** ✅
+  - Original routes (`/play`, `/leaderboard`, etc.) still functional
+  - Both route sets available simultaneously
+  - Redirect from `/` to `/test` for easier testing access
 - `frontend/src/app/pages/BettingPage.tsx` - Main betting interface ✅
   - Fetches event-market groups from backend API
   - Manages navigation state (event index, market index)
@@ -57,6 +62,10 @@ As of 2025-01-XX, V1 is **COMPLETE**:
   - **Daily reward button connected** ✅
   - **Bets history showing last 10 bets** ✅
   - Auto-refreshes every 5 seconds
+- `frontend/src/app/pages/LeaderboardPage.tsx` - Leaderboard page ✅
+  - **Fixed ranking discrepancy** ✅
+  - Snackbar now uses dynamic ranking from leaderboard data (matches list)
+  - Falls back to stored ranking only if user not in top 100
 - `frontend/src/features/betting/components/MarketCard.tsx` - Market display ✅
 - `frontend/src/features/betting/components/BettingControls.tsx` - Betting interface ✅
 - `frontend/src/shared/services/api.ts` - HTTP client ✅
@@ -216,6 +225,7 @@ As of 2025-01-XX, V1 is **COMPLETE**:
   - Redis caching (5 min TTL)
   - Background job updates rankings every 15 minutes
   - Frontend shows user ranking in snackbar
+  - **Fixed ranking discrepancy** ✅ - Snackbar now uses dynamic ranking from leaderboard data (matches list display)
 - ✅ **Daily Credits PRD Alignment**
   - Fixed to match PRD: 1000 start, +500/day up to 10000 max (18-day streak)
   - Changed window from 5 minutes to 24 hours

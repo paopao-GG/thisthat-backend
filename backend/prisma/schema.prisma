@@ -40,6 +40,8 @@ model User {
 
   // Relations
   bets                Bet[]
+  positions           Position[]
+  positionTrades      PositionTrade[]
   creditTransactions  CreditTransaction[]
   dailyRewards        DailyReward[]
   refreshTokens       RefreshToken[]
@@ -54,6 +56,8 @@ model User {
 }
 
 // Market model - Prediction markets (Polymarket + admin-created)
+// NOTE: Price data (odds, liquidity) is NOT stored here - it's fetched live from Polymarket API
+// This follows "lazy loading" pattern - prices change every second, so storing them is inefficient
 model Market {
   id              String   @id @default(uuid()) @db.Uuid
   polymarketId    String?  @unique @map("polymarket_id") @db.VarChar(255)
@@ -65,18 +69,15 @@ model Market {
   thisOption      String   @map("this_option") @db.VarChar(255)
   thatOption      String   @map("that_option") @db.VarChar(255)
 
-  // Odds (e.g., 0.6500 = 65%)
-  thisOdds        Decimal  @map("this_odds") @db.Decimal(5, 4)
-  thatOdds        Decimal  @map("that_odds") @db.Decimal(5, 4)
-
-  // Market metadata
-  liquidity       Decimal? @db.Decimal(18, 2)
+  // Market metadata (static data only - no prices)
+  author          String?  @db.VarChar(255) // submitted_by from Polymarket
   category        String?  @db.VarChar(100)
+  imageUrl        String?  @map("image_url") @db.VarChar(500) // Market image
   marketType      String   @default("polymarket") @map("market_type") @db.VarChar(50) // 'credits', 'polymarket', 'cross'
   status          String   @default("open") @db.VarChar(50) // 'open', 'closed', 'resolved', 'cancelled'
   resolution      String?  @db.VarChar(50) // 'this', 'that', 'invalid'
 
-  // Timing
+  // Timing - crucial for Janitor service
   expiresAt       DateTime? @map("expires_at") @db.Timestamp()
   resolvedAt      DateTime? @map("resolved_at") @db.Timestamp()
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamp()
@@ -84,11 +85,13 @@ model Market {
 
   // Relations
   bets            Bet[]
+  positions       Position[]
 
   @@index([status])
   @@index([category])
   @@index([marketType])
   @@index([polymarketId])
+  @@index([expiresAt]) // For Janitor queries
   @@map("markets")
 }
 
@@ -267,4 +270,83 @@ model StockTransaction {
   @@index([transactionHash])
   @@index([createdAt(sort: Desc)])
   @@map("stock_transactions")
+}
+
+// =============================================================================
+// POSITION TRADING SYSTEM - Tradeable shares like Polymarket
+// Users can buy/sell shares anytime before market resolution
+// =============================================================================
+
+// Position model - User's current holding in a market outcome
+// Similar to how Polymarket works: you own shares that can be sold
+model Position {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  marketId        String   @map("market_id") @db.Uuid
+
+  // Position details
+  side            String   @db.VarChar(10) // 'this' or 'that'
+  shares          Decimal  @db.Decimal(18, 8) // Number of shares owned (can be fractional)
+  avgBuyPrice     Decimal  @map("avg_buy_price") @db.Decimal(5, 4) // Weighted average buy price (0-1)
+  totalInvested   Decimal  @map("total_invested") @db.Decimal(18, 2) // Total credits spent on this position
+
+  // Status
+  status          String   @default("open") @db.VarChar(20) // 'open', 'closed', 'settled'
+
+  // Realized P&L (from partial sells before resolution)
+  realizedPnL     Decimal  @default(0.00) @map("realized_pnl") @db.Decimal(18, 2)
+
+  // Settlement (after market resolution)
+  settlementPayout Decimal? @map("settlement_payout") @db.Decimal(18, 2) // Final payout if market resolved
+  settledAt       DateTime? @map("settled_at") @db.Timestamp()
+
+  // Timestamps
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamp()
+
+  // Relations
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  market          Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  trades          PositionTrade[]
+
+  // Unique constraint: one position per user per market per side
+  @@unique([userId, marketId, side])
+  @@index([userId])
+  @@index([marketId])
+  @@index([status])
+  @@map("positions")
+}
+
+// PositionTrade model - Individual buy/sell transactions for a position
+// Tracks every trade for audit trail and P&L calculation
+model PositionTrade {
+  id              String   @id @default(uuid()) @db.Uuid
+  positionId      String   @map("position_id") @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+
+  // Trade details
+  type            String   @db.VarChar(10) // 'buy' or 'sell'
+  shares          Decimal  @db.Decimal(18, 8) // Shares in this trade
+  pricePerShare   Decimal  @map("price_per_share") @db.Decimal(5, 4) // Price at trade time (0-1)
+  totalAmount     Decimal  @map("total_amount") @db.Decimal(18, 2) // Credits exchanged
+
+  // P&L for sell trades
+  realizedPnL     Decimal? @map("realized_pnl") @db.Decimal(18, 2) // Profit/loss on this sell
+
+  // Balance tracking
+  balanceBefore   Decimal  @map("balance_before") @db.Decimal(18, 2)
+  balanceAfter    Decimal  @map("balance_after") @db.Decimal(18, 2)
+
+  // Timestamps
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamp()
+
+  // Relations
+  position        Position @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([positionId])
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt(sort: Desc)])
+  @@map("position_trades")
 }

@@ -48,7 +48,7 @@ const ProfilePage: React.FC = () => {
   // Redirect to signup if not authenticated
   useEffect(() => {
     if (!loading && !user) {
-      navigate('/signup');
+      navigate('/test/signup');
     }
   }, [user, loading, navigate]);
 

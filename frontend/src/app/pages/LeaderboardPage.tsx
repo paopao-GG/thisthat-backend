@@ -157,16 +157,27 @@ const LeaderboardPage: React.FC = () => {
     return filtered;
   }, [leaderboard, searchQuery, sortOrder, leaderboardType]);
 
+  // Calculate user's rank from leaderboard data (matches the list)
+  const userRankFromLeaderboard = React.useMemo(() => {
+    if (!user || !leaderboard.length) return null;
+    
+    const userEntry = leaderboard.find(entry => entry.user.id === user.id);
+    return userEntry ? userEntry.rank : null;
+  }, [user, leaderboard]);
+
   // Format ranking display text
   const getRankingText = () => {
-    if (!userRanking || userRanking.rank === null) {
+    // Use rank from leaderboard if available (matches the list), otherwise fall back to stored ranking
+    const rank = userRankFromLeaderboard ?? userRanking?.rank ?? null;
+    
+    if (rank === null) {
       return 'Not ranked yet';
     }
-    const rank = userRanking.rank;
-    const total = userRanking.totalUsers;
+    
+    const total = userRanking?.totalUsers ?? leaderboard.length;
     const value = leaderboardType === 'pnl' 
-      ? userRanking.overallPnL.toFixed(2)
-      : userRanking.totalVolume.toLocaleString();
+      ? (userRanking?.overallPnL ?? 0).toFixed(2)
+      : (userRanking?.totalVolume ?? 0).toLocaleString();
     const label = leaderboardType === 'pnl' ? 'PnL' : 'Volume';
     
     return `Rank #${rank} of ${total} • ${label}: ${value}`;

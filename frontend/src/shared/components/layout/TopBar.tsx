@@ -7,10 +7,10 @@ const TopBar: React.FC = () => {
   const location = useLocation();
 
   const getTitle = () => {
-    if (location.pathname === '/leaderboard') {
+    if (location.pathname === '/leaderboard' || location.pathname === '/test/leaderboard') {
       return 'Leaderboard';
     }
-    if (location.pathname === '/profile') {
+    if (location.pathname === '/profile' || location.pathname === '/test/profile') {
       return 'Profile';
     }
     return 'Play';
@@ -32,7 +32,7 @@ const TopBar: React.FC = () => {
       </div>
       <div className="flex gap-3 items-center">
         <button
-          onClick={() => navigate('/profile')}
+          onClick={() => navigate('/test/profile')}
           className="text-white p-2 hover:bg-white/10 rounded-lg transition-colors"
           aria-label="Profile"
         >

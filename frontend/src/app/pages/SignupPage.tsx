@@ -21,7 +21,7 @@ const SignupPage: React.FC = () => {
 
     try {
       await signup(formData.username, formData.email, formData.password, formData.name);
-      navigate('/profile');
+      navigate('/test/profile');
     } catch (err: any) {
       // Extract error message
       let errorMessage = 'Failed to create account. Please try again.';
@@ -157,7 +157,7 @@ const SignupPage: React.FC = () => {
           <div className="text-center">
             <button
               type="button"
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/test')}
               className="text-sm text-white/50 hover:text-white/70 transition-colors"
             >
               Back to Home

@@ -10,7 +10,7 @@ const HomePage: React.FC = () => {
       <button 
         className="absolute top-6 right-6 flex items-center justify-center w-10 h-10 rounded-full text-white border border-white/10 hover:border-white/20 transition-all"
         style={{ background: 'rgba(30, 30, 30, 0.8)' }}
-        onClick={() => navigate('/profile')}
+        onClick={() => navigate('/test/profile')}
         aria-label="Profile"
       >
         <User size={18} className="text-white" />
@@ -31,7 +31,7 @@ const HomePage: React.FC = () => {
           <button 
             className="w-full px-6 py-3.5 text-sm font-semibold text-white border border-white/10 hover:border-white/20 transition-all tracking-wide uppercase"
             style={{ background: 'rgba(30, 30, 30, 0.8)' }}
-            onClick={() => navigate('/signup')}
+            onClick={() => navigate('/test/signup')}
           >
             Sign Up
           </button>
@@ -39,7 +39,7 @@ const HomePage: React.FC = () => {
           <button 
             className="w-full px-6 py-3.5 text-sm font-semibold text-white border border-white/10 hover:border-white/20 transition-all tracking-wide uppercase"
             style={{ background: 'rgba(30, 30, 30, 0.8)' }}
-            onClick={() => navigate('/login')}
+            onClick={() => navigate('/test/login')}
           >
             Login
           </button>
@@ -47,7 +47,7 @@ const HomePage: React.FC = () => {
           <button 
             className="w-full px-6 py-3.5 text-sm font-semibold text-white border border-white/10 hover:border-white/20 transition-all tracking-wide uppercase"
             style={{ background: 'rgba(30, 30, 30, 0.8)' }}
-            onClick={() => navigate('/play')}
+            onClick={() => navigate('/test/play')}
           >
             Play
           </button>
@@ -55,7 +55,7 @@ const HomePage: React.FC = () => {
           <button 
             className="w-full px-6 py-3.5 text-sm font-semibold text-white border border-white/10 hover:border-white/20 transition-all tracking-wide uppercase"
             style={{ background: 'rgba(30, 30, 30, 0.8)' }}
-            onClick={() => navigate('/leaderboard')}
+            onClick={() => navigate('/test/leaderboard')}
           >
             Leaderboards
           </button>
@@ -63,7 +63,7 @@ const HomePage: React.FC = () => {
           <button 
             className="w-full px-6 py-3.5 text-sm font-semibold text-white border border-white/10 hover:border-white/20 transition-all tracking-wide uppercase"
             style={{ background: 'rgba(30, 30, 30, 0.8)' }}
-            onClick={() => navigate('/stocks')}
+            onClick={() => navigate('/test/stocks')}
           >
             Stock Market
           </button>

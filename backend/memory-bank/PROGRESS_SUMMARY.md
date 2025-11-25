@@ -102,6 +102,7 @@
   - Real leaderboard data from API
   - User ranking snackbar at bottom
   - User row highlighting
+  - ✅ **Fixed ranking discrepancy** - Snackbar now uses dynamic ranking (matches list display)
   - PnL/Volume toggle
 
 ### Credit Transactions (100%)
@@ -349,6 +350,16 @@
 **Updated By:** V1 COMPLETE - All Critical Features Implemented
 
 ## 🎉 Recent Achievements
+
+### Frontend & UX Improvements (2025-01-XX)
+- ✅ **Testing Routes Added** - Nested `/test/*` routes for testing alongside original routes
+  - Both route sets available simultaneously
+  - Original routes (`/play`, `/leaderboard`, etc.) still functional
+  - Redirect from `/` to `/test` for easier testing access
+- ✅ **Leaderboard Ranking Fix** - Fixed discrepancy between snackbar and list
+  - Snackbar now uses dynamic ranking from leaderboard data (matches list display)
+  - Ensures consistent ranking display across UI components
+  - Falls back to stored ranking only if user not in top 100
 
 ### Economy System (2025-01-XX)
 - ✅ Daily credit allocation with consecutive day bonuses

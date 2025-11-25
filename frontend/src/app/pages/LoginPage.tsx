@@ -19,7 +19,7 @@ const LoginPage: React.FC = () => {
 
     try {
       await login(formData.email, formData.password);
-      navigate('/profile');
+      navigate('/test/profile');
     } catch (err: any) {
       // Extract error message
       let errorMessage = 'Failed to login. Please try again.';
@@ -117,7 +117,7 @@ const LoginPage: React.FC = () => {
           <div className="text-center space-y-2">
             <button
               type="button"
-              onClick={() => navigate('/signup')}
+              onClick={() => navigate('/test/signup')}
               className="text-sm text-white/50 hover:text-white/70 transition-colors"
             >
               Don't have an account? Sign up
@@ -125,7 +125,7 @@ const LoginPage: React.FC = () => {
             <div>
               <button
                 type="button"
-                onClick={() => navigate('/')}
+                onClick={() => navigate('/test')}
                 className="text-sm text-white/50 hover:text-white/70 transition-colors"
               >
                 Back to Home

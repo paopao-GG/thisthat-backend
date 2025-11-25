@@ -4,7 +4,7 @@ import TopBar from './TopBar';
 
 const AppLayout: React.FC = () => {
   const location = useLocation();
-  const isHomePage = location.pathname === '/';
+  const isHomePage = location.pathname === '/' || location.pathname === '/test' || location.pathname === '/test/';
 
   return (
     <div className="flex flex-col h-screen w-full text-white overflow-hidden" style={{ background: 'radial-gradient(ellipse at left, rgba(30, 30, 45, 0.5) 0%, transparent 50%), radial-gradient(ellipse at right, rgba(30, 30, 45, 0.5) 0%, transparent 50%), #0a0a0a' }}>

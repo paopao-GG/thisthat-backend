@@ -261,6 +261,7 @@
 - [x] Redis caching implementation ✅
 - [x] Leaderboard update background job (runs every 15 min) ✅
 - [x] Frontend integration with user ranking snackbar ✅
+- [x] **Fixed ranking discrepancy** ✅ - Snackbar now uses dynamic ranking from leaderboard data (matches list display)
 - [ ] Performance testing with 10K+ simulated users ⏳
 
 **Economy System (Week 4-5)** - ✅ COMPLETE (2025-01-XX)
@@ -965,15 +966,17 @@ curl "http://localhost:3001/api/v1/markets/stats"
 ---
 
 **Last Updated:** 2025-01-XX
-**Updated By:** V1 COMPLETE - All Critical Features Implemented + Unit Test Suite Complete
+**Updated By:** V1 COMPLETE - All Critical Features Implemented + Unit Test Suite Complete + Frontend Routing & Leaderboard Fixes
 **Status:** ✅ V1 is production-ready. All core features complete:
 - ✅ Market resolution & automatic payouts
 - ✅ Leaderboards (PnL & Volume) with user ranking
+  - ✅ **Fixed ranking discrepancy** - Snackbar now matches list display
 - ✅ Daily credits PRD-aligned
 - ✅ Credit transactions history
 - ✅ Auth refresh/logout
 - ✅ Redis caching (optional)
 - ✅ **Complete unit test suite (222 tests, 19/19 files passing)**
 - ✅ **Mock hoisting issues resolved using `vi.hoisted()` pattern**
+- ✅ **Frontend testing routes** - Nested `/test/*` routes added alongside original routes
 
 **Next Review:** After testing phase or production deployment
