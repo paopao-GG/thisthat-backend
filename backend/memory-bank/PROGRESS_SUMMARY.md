@@ -65,16 +65,19 @@
 
 ## ✅ Newly Completed Features (2025-01-XX)
 
-### Unit Test Suite (100%)
-- ✅ **Complete V1 Test Coverage**
-  - 222 unit tests covering all V1 features
-  - Auth, Users, Betting, Economy, Leaderboard, Transactions, Market Resolution
-  - All services and controllers tested
-  - 19/19 test files passing
-- ✅ **Mock Hoisting Issues Resolved**
-  - Fixed 8 test files failing due to Vitest mock hoisting errors
-  - Used `vi.hoisted()` pattern for all Prisma mocks
-  - Established proper testing patterns for future development
+### Frontend2 ↔ Backend Integration (V1-only scope)
+- ✅ Connected `frontend2` React app to every V1 credit pathway (auth, markets, betting, streak claims, referrals, purchases, leaderboards)
+- ✅ Introduced `RequireAuth` + `/login` + `/signup` routes so only authenticated sessions reach `/app/*`
+- ✅ Replaced all mock data with live API calls using the shared `apiClient`, including odds refresh, wallet balances, referral stats, purchase packages, and leaderboard data
+- ✅ Added new referral & purchase services plus UI wiring on the profile page, Home, Betting, Leaderboard, and TopBar components
+
+### Targeted Unit Tests (continuing)
+- ✅ **Added regression tests for the economy, referral, and purchase services**
+  - Verifies 10,000-credit cap logic, UTC reset handling, referral stats, and credit purchase flows
+  - Established reusable mocked Prisma helpers for new modules
+- ⚠️ **Full-suite automation still underway**
+  - Broader service/controller coverage is being expanded; previous “222 tests” goal remains a stretch target
+  - Current focus is high-risk modules touched in this update
 
 ## ✅ Previously Completed Features (2025-01-XX)
 
@@ -114,8 +117,15 @@
 - ✅ **POST /api/v1/auth/logout** - Logout and token invalidation
 
 ### Daily Credits PRD Alignment (100%)
-- ✅ Fixed formula to match PRD: 1000 start, +500/day up to 10000 max
-- ✅ Changed window from 5 minutes to 24 hours
+- ✅ Fixed formula to match PRD: 1000 start, +500/day up to 10,000 max (day 18+ stays capped)
+- ✅ Reset logic now keys off **00:00 UTC** to match PRD (no more rolling 24-hour window)
+- ✅ Background job runs via cron at midnight UTC (with an immediate run on boot for testing convenience)
+
+### Referral & Purchase Flows (100%)
+- ✅ Optional referral codes on signup (awards +200 credits to referrers, tracks referral counts/credits)
+- ✅ `GET /api/v1/referrals/me` exposes codes, stats, and recent referrals for the UI
+- ✅ Credit purchase flow with predefined packages (`POST /api/v1/purchases`, `GET /packages`, `GET /me`)
+- ✅ Frontend profile page now wired to real referral stats and purchase endpoints
 
 ### Redis Setup (100%)
 - ✅ Connection configured with graceful fallback
@@ -144,24 +154,17 @@
 
 ### Phase 5: Economy System (100%)
 - ✅ **Daily Credit Allocation**
-  - POST /api/v1/economy/daily-credits - Claim daily rewards
-  - Base: 100 credits/day + consecutive day bonus (+10 per day)
-  - Background job runs every 5 minutes (testing mode)
-  - Frontend button connected
-- ✅ **Stock Market System**
-  - POST /api/v1/economy/buy - Buy stocks with leverage
-  - POST /api/v1/economy/sell - Sell stocks
-  - GET /api/v1/economy/portfolio - Get user portfolio
-  - GET /api/v1/economy/stocks - Get all stocks (public)
-  - Leverage support (1x-10x)
-  - Supply mechanics (circulating supply, market cap)
-- ✅ **Transaction Signing**
-  - SHA-256 hash generation for all transactions
-  - Unique transaction hash per transaction
-- ✅ **Frontend Integration**
-  - StockMarketPage component
-  - EconomyService API client
-  - Daily reward button in ProfilePage
+  - `POST /api/v1/economy/daily-credits` ties into streak logic (1k start, +500/day, 10k cap @ day 18)
+  - Cron job now runs nightly at 00:00 UTC with an immediate run on boot
+  - Frontend home screen shows real streak data + claim CTA
+- ✅ **Referral Ledger**
+  - Optional referral codes at signup, code stats at `GET /api/v1/referrals/me`
+  - 200-credit referral bonus recorded in `CreditTransaction`
+- ✅ **Credit Purchases**
+  - `GET /api/v1/purchases/packages`, `POST /api/v1/purchases`, and `GET /api/v1/purchases/me`
+  - Profile page surfaces purchasable packs and history (simulated rails for V1)
+- ✅ **Transaction Logging**
+  - Every claim, bet, purchase, and referral bonus records a transaction row with SHA-256 signing
 
 ### MongoDB ↔ PostgreSQL Sync (100%)
 - ✅ **Sync Service** - Syncs markets from MongoDB to PostgreSQL
@@ -186,12 +189,12 @@
 
 ### V2 Features (Out of Scope for V1)
 - [ ] Wallet integration (MetaMask, Phantom)
-- [ ] USDC betting
-- [ ] In-app credit purchases
-- [ ] Creator-driven markets
+- [ ] USDC betting / real-money onramps
+- [ ] On-chain/fiat purchase settlement (Stripe, Ramp, etc.)
+- [ ] Creator-driven markets and market creation UX
 - [ ] $THIS token economics
-- [ ] Referral system
-- [ ] Email notifications
+- [ ] Email / push notifications
+- [ ] Social graph features outside referrals
 
 ---
 
@@ -282,22 +285,21 @@
 ## 🐛 Known Issues
 
 1. **Database Migrations Pending**
-   - Prisma schema updated with economy and stock models
-   - Need to run: `npx prisma db push` to create tables
-   - Database connection configured in `.env` but tables may not exist
+   - Prisma schema now includes referral + purchase models in addition to economy/stock tables
+   - Need to run: `npx prisma db push` to materialize new columns/indexes
+   - Database connection configured in `.env` but tables may not exist yet
 
-2. **Refresh Token & Logout Not Implemented**
-   - Signup/login work but token refresh and logout endpoints missing
-   - Frontend doesn't handle token refresh yet
+2. **Legacy Referral Backfill**
+   - Existing users created before this update will have UUID-style referral codes
+   - Consider running a backfill script to regenerate 8-character codes for legacy accounts
 
 3. **Rate Limiting Missing**
    - Auth endpoints don't have rate limiting yet
    - Should add @fastify/rate-limit plugin
 
 4. **Testing Coverage**
-   - Phase 1: 116 tests, 97%+ coverage ✅
-   - Phase 2+: No tests yet for auth, betting, economy modules
-   - Should add tests before production
+   - New vitest specs added for economy/referral/purchase flows
+   - Broader service + controller coverage is still pending to hit the long-term “fully automated” goal
 
 5. **Market Sync Dependency**
    - Betting requires markets to be synced from MongoDB to PostgreSQL

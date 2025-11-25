@@ -34,15 +34,15 @@
 - ✅ Used for all bets in V1
 - ✅ Minimum/maximum bet configurable (10-10,000)
 - ✅ Payouts mirrors Polymarket odds
-- ⚠️ Can also be earned through in-app purchases (NOT IMPLEMENTED - likely V2)
+- ✅ Can also be earned through referrals and in-app credit purchases
 
-### Implementation Status: ✅ **COMPLETE** (except in-app purchases)
-- Daily credits system ✅ (matches PRD formula exactly)
+### Implementation Status: ✅ **COMPLETE**
+- Daily credits system ✅ (matches PRD formula exactly; capped at 10k with UTC resets)
 - Streak tracking ✅
 - Starting balance (1000 credits) ✅
 - Bet limits (10-10,000) ✅
 - Payout calculation ✅
-- ⚠️ In-app purchases: NOT IMPLEMENTED (deferred to V2)
+- Referral rewards + credit packages ✅ (Stripe/Wallet rails remain V2, but credit acquisition endpoints exist)
 
 ---
 

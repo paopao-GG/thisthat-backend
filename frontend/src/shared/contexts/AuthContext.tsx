@@ -4,7 +4,13 @@ import { authService, type User } from '../services/authService';
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  signup: (username: string, email: string, password: string, name: string) => Promise<void>;
+  signup: (
+    username: string,
+    email: string,
+    password: string,
+    name: string,
+    referralCode?: string
+  ) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
@@ -35,9 +41,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loadUser();
   }, []);
 
-  const signup = async (username: string, email: string, password: string, name: string) => {
+  const signup = async (
+    username: string,
+    email: string,
+    password: string,
+    name: string,
+    referralCode?: string
+  ) => {
     try {
-      const response = await authService.signup({ username, email, password, name });
+      const response = await authService.signup({ username, email, password, name, referralCode });
       if (response.success) {
         setUser(response.user);
       } else {

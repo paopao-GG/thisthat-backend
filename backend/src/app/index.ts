@@ -22,6 +22,8 @@ import transactionRoutes from '../features/transactions/transactions.routes.js';
 import { marketsRoutes } from '../features/markets/markets.routes.js';
 import { positionsRoutes } from '../features/positions/positions.routes.js';
 import redis from '../lib/redis.js';
+import referralRoutes from '../features/referrals/referral.routes.js';
+import purchaseRoutes from '../features/purchases/purchases.routes.js';
 
 // Load environment variables
 dotenv.config();
@@ -85,6 +87,12 @@ await fastify.register(leaderboardRoutes, { prefix: '/api/v1/leaderboard' });
 
 // Register Transaction routes
 await fastify.register(transactionRoutes, { prefix: '/api/v1/transactions' });
+
+// Register Referral routes
+await fastify.register(referralRoutes, { prefix: '/api/v1/referrals' });
+
+// Register Purchase routes
+await fastify.register(purchaseRoutes, { prefix: '/api/v1/purchases' });
 
 // Register new Markets routes (client-facing with lazy loading - PostgreSQL + on-demand pricing)
 await fastify.register(marketsRoutes, { prefix: '/api/v1/markets' });

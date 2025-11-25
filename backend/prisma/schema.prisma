@@ -17,6 +17,10 @@ model User {
   email               String   @unique @db.VarChar(255)
   name                String?  @db.VarChar(100) // Display name
   passwordHash        String   @map("password_hash") @db.VarChar(255)
+  referralCode        String   @unique @default(uuid()) @map("referral_code") @db.VarChar(36)
+  referredById        String?  @map("referred_by_id") @db.Uuid
+  referralCount       Int      @default(0) @map("referral_count")
+  referralCreditsEarned Decimal @default(0.00) @map("referral_credits_earned") @db.Decimal(18, 2)
 
   // Credits system (V1 only)
   creditBalance       Decimal  @default(1000.00) @map("credit_balance") @db.Decimal(18, 2)
@@ -47,11 +51,15 @@ model User {
   refreshTokens       RefreshToken[]
   stockHoldings       StockHolding[]
   stockTransactions   StockTransaction[]
+  creditPurchases     CreditPurchase[]
+  referredUsers       User[]   @relation("UserReferrals")
+  referredBy          User?    @relation("UserReferrals", fields: [referredById], references: [id])
 
   @@index([username])
   @@index([email])
   @@index([rankByPnL])
   @@index([rankByVolume])
+  @@index([referralCode])
   @@map("users")
 }
 
@@ -129,7 +137,7 @@ model CreditTransaction {
   userId          String   @map("user_id") @db.Uuid
 
   amount          Decimal  @db.Decimal(18, 2) // Positive = credit, negative = debit
-  transactionType String   @map("transaction_type") @db.VarChar(50) // 'daily_reward', 'bet_placed', 'bet_payout', 'purchase'
+  transactionType String   @map("transaction_type") @db.VarChar(50) // 'daily_reward', 'bet_placed', 'bet_payout', 'purchase', 'referral_bonus'
   referenceId     String?  @map("reference_id") @db.Uuid // Bet ID or reward ID
   balanceAfter    Decimal  @map("balance_after") @db.Decimal(18, 2)
 
@@ -141,6 +149,24 @@ model CreditTransaction {
   @@index([userId])
   @@index([createdAt(sort: Desc)])
   @@map("credit_transactions")
+}
+
+// CreditPurchase model - Records of credit top-ups (simulated / in-app purchases)
+model CreditPurchase {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  packageId       String   @map("package_id") @db.VarChar(50)
+  creditsGranted  Decimal  @map("credits_granted") @db.Decimal(18, 2)
+  usdAmount       Decimal  @map("usd_amount") @db.Decimal(18, 2)
+  status          String   @default("completed") @db.VarChar(20) // 'pending', 'completed', 'failed'
+  provider        String?  @db.VarChar(50) // e.g., 'stripe', 'manual'
+  externalId      String?  @map("external_id") @db.VarChar(100)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamp()
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("credit_purchases")
 }
 
 // DailyReward model - Track daily login rewards

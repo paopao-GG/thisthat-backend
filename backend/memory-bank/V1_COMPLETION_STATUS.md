@@ -43,10 +43,11 @@ All critical V1 features have been successfully implemented and are production-r
    - Ranking calculation job (15 min intervals)
 
 6. ✅ **Economy System** (100%)
-   - Daily credits (PRD-aligned: 1000→1500→2000... up to 10000)
-   - Stock market trading
-   - Transaction signing
-   - Background job (5 min intervals for testing)
+   - Daily credits (PRD-aligned: 1000→1500→2000... up to 10,000 with UTC-midnight resets)
+   - Referral bonuses (+200 credits, referral stats endpoint)
+   - Credit purchase ledger (predefined packages, simulated settlement)
+   - Transaction signing + logging for every credit movement
+   - Background job runs nightly at 00:00 UTC (cron) with an immediate dev-run for faster feedback
 
 7. ✅ **Credit Transactions** (100%)
    - Transaction history endpoint
@@ -57,37 +58,44 @@ All critical V1 features have been successfully implemented and are production-r
    - Market/Event fetching
    - MongoDB ↔ PostgreSQL sync
 
-9. ✅ **Unit Test Suite** (100%)
-   - 222 unit tests covering all V1 features
-   - All services and controllers tested
-   - Mock hoisting issues resolved
-   - 19/19 test files passing
+9. ✅ **Unit Test Coverage** (expanding)
+   - Targeted Vitest specs for economy, referral, and purchase services
+   - Mock-hoisted Prisma helpers shared across new suites
+   - Broader controller/service coverage still being added to meet the long-term automation goal
 
-### ✅ Frontend: ~95% Complete
+10. ✅ **Referral & Credit Purchases** (100%)
+    - Optional referral codes on signup (awards 200 credits to referrers)
+    - `/api/v1/referrals/me` exposes stats + recent referrals for the frontend
+    - Credit packages available via `/api/v1/purchases` (starter → whale tiers)
+
+### ✅ Frontend2: ~95% Complete (V1 Credit Scope)
 
 #### Core Features
-1. ✅ **Betting UI**
-   - THIS/THAT betting interface
-   - Balance input
-   - Swipe navigation
-   - Market cards
+1. ✅ **Auth & Navigation**
+   - `/login`, `/signup`, and `/app/*` routes wired through `AuthProvider`
+   - `RequireAuth` guard ensures only logged-in users reach the app shell
+   - Tokens persisted via the shared API client
 
-2. ✅ **Leaderboard UI**
+2. ✅ **Betting UI**
+   - THIS/THAT betting interface
+   - Balance input with 10–10,000 validation
+   - Swipe navigation
+   - Market cards backed by live Polymarket odds
+
+3. ✅ **Leaderboard UI**
    - PnL/Volume toggle
    - Real data from API
    - User ranking snackbar
    - User row highlighting
 
-3. ✅ **Profile Page**
-   - User stats
+4. ✅ **Profile Page**
+   - User stats (credits, streak, volume, PnL)
    - Bets history
    - Daily reward button
+   - Referral code/link display + copy helpers
+   - Credit purchase cards and purchase history
 
-4. ✅ **Stock Market Page**
-   - Trading interface
-   - Portfolio display
-
-5. ⏳ **Transaction History UI** (backend ready, UI pending)
+5. ⏳ **Full Transaction Ledger UI** (backend ready, table component still pending)
 
 ---
 
@@ -111,12 +119,8 @@ All critical V1 features have been successfully implemented and are production-r
 - GET /api/v1/bets/me ✅
 - GET /api/v1/bets/:betId ✅
 
-### Economy (5 endpoints) ✅
+### Economy (1 endpoint) ✅
 - POST /api/v1/economy/daily-credits ✅
-- POST /api/v1/economy/buy ✅
-- POST /api/v1/economy/sell ✅
-- GET /api/v1/economy/portfolio ✅
-- GET /api/v1/economy/stocks ✅
 
 ### Leaderboards (3 endpoints) ✅
 - GET /api/v1/leaderboard/pnl ✅
@@ -125,6 +129,14 @@ All critical V1 features have been successfully implemented and are production-r
 
 ### Transactions (1 endpoint) ✅
 - GET /api/v1/transactions/me ✅
+
+### Referrals (1 endpoint) ✅
+- GET /api/v1/referrals/me ✅
+
+### Purchases (3 endpoints) ✅
+- GET /api/v1/purchases/packages ✅
+- POST /api/v1/purchases ✅
+- GET /api/v1/purchases/me ✅
 
 ### Markets (3 endpoints) ✅
 - GET /api/v1/markets ✅
@@ -141,7 +153,7 @@ All critical V1 features have been successfully implemented and are production-r
 
 All 4 background jobs are running:
 
-1. ✅ **Daily Credits Job** - Every 5 minutes (testing mode)
+1. ✅ **Daily Credits Job** - Nightly at 00:00 UTC (cron) with an immediate run on boot for testing
 2. ✅ **Market Sync Job** - Every 5 minutes
 3. ✅ **Market Resolution Job** - Every 1 minute ⭐ NEW
 4. ✅ **Leaderboard Update Job** - Every 15 minutes ⭐ NEW
@@ -170,20 +182,11 @@ All 4 background jobs are running:
 ### Infrastructure
 - `src/lib/redis.ts` (with graceful fallback)
 
-### Unit Tests (222 tests total)
-- `src/features/auth/__tests__/auth.services.test.ts`
-- `src/features/auth/__tests__/auth.controllers.test.ts`
-- `src/features/users/__tests__/user.services.test.ts`
-- `src/features/users/__tests__/user.controllers.test.ts`
-- `src/features/betting/__tests__/betting.services.test.ts`
-- `src/features/betting/__tests__/betting.controllers.test.ts`
-- `src/features/economy/__tests__/economy.services.test.ts`
-- `src/features/economy/__tests__/economy.controllers.test.ts`
-- `src/features/leaderboard/__tests__/leaderboard.services.test.ts`
-- `src/features/leaderboard/__tests__/leaderboard.controllers.test.ts`
-- `src/features/transactions/__tests__/transactions.services.test.ts`
-- `src/features/transactions/__tests__/transactions.controllers.test.ts`
-- `src/features/market-resolution/__tests__/market-resolution.services.test.ts`
+### Unit Tests (key specs)
+- `src/features/economy/__tests__/economy.services.test.ts` – validates the 10k cap + UTC claims
+- `src/features/referrals/__tests__/referral.services.test.ts` – covers referral stat mapping
+- `src/features/purchases/__tests__/purchases.services.test.ts` – covers package validation + balance updates
+- Additional suites for auth/betting/users/etc. remain available and are being expanded alongside new work
 
 ### Frontend Services
 - `frontend/src/shared/services/leaderboardService.ts`
@@ -204,10 +207,11 @@ All 4 background jobs are running:
 
 ### Section 2: Credit System ✅
 - ✅ Starting balance (1000 credits)
-- ✅ Daily claims (PRD formula: 1000→1500→2000... up to 10000)
+- ✅ Daily claims (PRD formula: 1000→1500→2000... up to 10,000 with UTC resets)
 - ✅ Minimum/maximum bet (10-10,000)
 - ✅ Payouts mirror Polymarket odds
-- ⏳ In-app purchases (V2 feature)
+- ✅ Referral earnings (+200 credits to referrers, tracked via `/api/v1/referrals/me`)
+- ✅ Credit purchases via predefined packages (Stripe/Wallet integration still V2)
 
 ### Section 3: Market Selection ✅
 - ✅ Polymarket markets
@@ -265,8 +269,8 @@ All 4 background jobs are running:
 
 ### V2 Features (Out of Scope)
 - Wallet integration
-- USDC betting
-- In-app purchases
+- USDC betting / cash onramps
+- Real-money purchase settlement
 - Creator markets
 - $THIS token economics
 

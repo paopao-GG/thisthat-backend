@@ -1,10 +1,14 @@
 import bcrypt from 'bcrypt';
+import crypto from 'node:crypto';
 import { prisma } from '../../lib/database.js';
 import type { SignupInput, LoginInput } from './auth.models.js';
 import { FastifyJWT } from '@fastify/jwt';
 
 const SALT_ROUNDS = 12;
 const STARTING_CREDITS = 1000;
+const REFERRAL_BONUS_CREDITS = 200;
+const REFERRAL_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const REFERRAL_CODE_LENGTH = 8;
 
 export interface AuthTokens {
   accessToken: string;
@@ -20,6 +24,14 @@ export interface UserProfile {
   availableCredits: number;
   expendedCredits: number;
   consecutiveDaysOnline: number;
+  referralCode: string;
+  referralCount: number;
+  referralCreditsEarned: number;
+  totalVolume: number;
+  overallPnL: number;
+  lastDailyRewardAt: Date | null;
+  rankByPnL: number | null;
+  rankByVolume: number | null;
 }
 
 /**
@@ -36,6 +48,49 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
   return bcrypt.compare(password, hash);
 }
 
+async function generateReferralCode(): Promise<string> {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    let code = '';
+    for (let i = 0; i < REFERRAL_CODE_LENGTH; i++) {
+      const idx = crypto.randomInt(0, REFERRAL_CODE_ALPHABET.length);
+      code += REFERRAL_CODE_ALPHABET[idx];
+    }
+
+    const existing = await prisma.user.findUnique({
+      where: { referralCode: code },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      return code;
+    }
+  }
+
+  // Fallback to uuid if collisions keep happening
+  return crypto.randomUUID().replace(/-/g, '').slice(0, REFERRAL_CODE_LENGTH).toUpperCase();
+}
+
+function mapUserToProfile(user: any): UserProfile {
+  return {
+    id: user.id,
+    username: user.username,
+    email: user.email,
+    name: user.name,
+    creditBalance: Number(user.creditBalance ?? 0),
+    availableCredits: Number(user.availableCredits ?? 0),
+    expendedCredits: Number(user.expendedCredits ?? 0),
+    consecutiveDaysOnline: user.consecutiveDaysOnline ?? 1,
+    referralCode: user.referralCode,
+    referralCount: user.referralCount ?? 0,
+    referralCreditsEarned: Number(user.referralCreditsEarned ?? 0),
+    totalVolume: Number(user.totalVolume ?? 0),
+    overallPnL: Number(user.overallPnL ?? 0),
+    lastDailyRewardAt: user.lastDailyRewardAt ?? null,
+    rankByPnL: user.rankByPnL ?? null,
+    rankByVolume: user.rankByVolume ?? null,
+  };
+}
+
 /**
  * Register a new user
  */
@@ -43,6 +98,20 @@ export async function registerUser(
   input: SignupInput,
   jwt: FastifyJWT['jwt']
 ): Promise<{ user: UserProfile; tokens: AuthTokens }> {
+  const normalizedReferralCode = input.referralCode?.trim().toUpperCase();
+  let referringUser: { id: string } | null = null;
+
+  if (normalizedReferralCode) {
+    referringUser = await prisma.user.findUnique({
+      where: { referralCode: normalizedReferralCode },
+      select: { id: true },
+    });
+
+    if (!referringUser) {
+      throw new Error('Invalid referral code');
+    }
+  }
+
   // Check if email already exists
   const existingEmail = await prisma.user.findUnique({
     where: { email: input.email },
@@ -63,30 +132,65 @@ export async function registerUser(
 
   // Hash password
   const passwordHash = await hashPassword(input.password);
+  const referralCode = await generateReferralCode();
 
-  // Create user with starting credits and economy fields
-  const user = await prisma.user.create({
-    data: {
-      username: input.username,
-      email: input.email,
-      name: input.name,
-      passwordHash,
-      creditBalance: STARTING_CREDITS,
-      availableCredits: STARTING_CREDITS, // Initialize available credits
-      expendedCredits: 0, // Initialize expended credits
-      consecutiveDaysOnline: 1, // Start with 1 day
-      lastLoginAt: new Date(), // Set initial login time
-    },
-  });
+  const { user } = await prisma.$transaction(async (tx) => {
+    const createdUser = await tx.user.create({
+      data: {
+        username: input.username,
+        email: input.email,
+        name: input.name,
+        passwordHash,
+        creditBalance: STARTING_CREDITS,
+        availableCredits: STARTING_CREDITS,
+        expendedCredits: 0,
+        consecutiveDaysOnline: 1,
+        lastLoginAt: new Date(),
+        referralCode,
+        referredById: referringUser?.id ?? null,
+      },
+    });
 
-  // Create initial credit transaction for signup bonus
-  await prisma.creditTransaction.create({
-    data: {
-      userId: user.id,
-      amount: STARTING_CREDITS,
-      transactionType: 'signup_bonus',
-      balanceAfter: STARTING_CREDITS,
-    },
+    await tx.creditTransaction.create({
+      data: {
+        userId: createdUser.id,
+        amount: STARTING_CREDITS,
+        transactionType: 'signup_bonus',
+        balanceAfter: STARTING_CREDITS,
+      },
+    });
+
+    if (referringUser) {
+      const referrer = await tx.user.update({
+        where: { id: referringUser.id },
+        data: {
+          creditBalance: {
+            increment: REFERRAL_BONUS_CREDITS,
+          },
+          availableCredits: {
+            increment: REFERRAL_BONUS_CREDITS,
+          },
+          referralCount: {
+            increment: 1,
+          },
+          referralCreditsEarned: {
+            increment: REFERRAL_BONUS_CREDITS,
+          },
+        },
+      });
+
+      await tx.creditTransaction.create({
+        data: {
+          userId: referringUser.id,
+          amount: REFERRAL_BONUS_CREDITS,
+          transactionType: 'referral_bonus',
+          referenceId: createdUser.id,
+          balanceAfter: Number(referrer.creditBalance),
+        },
+      });
+    }
+
+    return { user: createdUser };
   });
 
   // Generate JWT tokens
@@ -111,16 +215,7 @@ export async function registerUser(
   });
 
   return {
-    user: {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      name: user.name,
-      creditBalance: Number(user.creditBalance),
-      availableCredits: Number(user.availableCredits),
-      expendedCredits: Number(user.expendedCredits),
-      consecutiveDaysOnline: user.consecutiveDaysOnline,
-    },
+    user: mapUserToProfile(user),
     tokens: {
       accessToken,
       refreshToken,
@@ -206,16 +301,7 @@ export async function authenticateUser(
   });
 
   return {
-    user: {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      name: user.name,
-      creditBalance: Number(user.creditBalance),
-      availableCredits: Number(user.availableCredits),
-      expendedCredits: Number(user.expendedCredits),
-      consecutiveDaysOnline: user.consecutiveDaysOnline,
-    },
+    user: mapUserToProfile(user),
     tokens: {
       accessToken,
       refreshToken,
@@ -238,6 +324,14 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
       availableCredits: true,
       expendedCredits: true,
       consecutiveDaysOnline: true,
+      referralCode: true,
+      referralCount: true,
+      referralCreditsEarned: true,
+      totalVolume: true,
+      overallPnL: true,
+      lastDailyRewardAt: true,
+      rankByPnL: true,
+      rankByVolume: true,
     },
   });
 
@@ -245,16 +339,7 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
     return null;
   }
 
-  return {
-    id: user.id,
-    username: user.username,
-    email: user.email,
-    name: user.name,
-    creditBalance: Number(user.creditBalance),
-    availableCredits: Number(user.availableCredits),
-    expendedCredits: Number(user.expendedCredits),
-    consecutiveDaysOnline: user.consecutiveDaysOnline,
-  };
+  return mapUserToProfile(user);
 }
 
 /**

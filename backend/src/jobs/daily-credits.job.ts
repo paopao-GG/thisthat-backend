@@ -1,12 +1,13 @@
 /**
  * Daily Credit Allocation Job
- * Runs every 5 minutes for testing (normally 24 hours)
+ * Runs every midnight (00:00 UTC) via cron, plus once on boot for fast feedback
  */
 
+import cron from 'node-cron';
 import { prisma } from '../lib/database.js';
 import * as economyService from '../features/economy/economy.services.js';
 
-let jobInterval: NodeJS.Timeout | null = null;
+let cronTask: cron.ScheduledTask | null = null;
 
 /**
  * Process daily credits for all eligible users
@@ -15,14 +16,16 @@ async function processDailyCreditsForAllUsers() {
   try {
     console.log('[Daily Credits Job] Starting daily credit allocation...');
     
-    // Get all users who haven't claimed in the last 5 minutes (for testing)
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const now = new Date();
+    const currentMidnightUtc = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+    );
     
     const users = await prisma.user.findMany({
       where: {
         OR: [
           { lastDailyRewardAt: null }, // Never claimed
-          { lastDailyRewardAt: { lt: fiveMinutesAgo } }, // Last claim > 5 minutes ago (for testing)
+          { lastDailyRewardAt: { lt: currentMidnightUtc } }, // Not yet processed for the new UTC day
         ],
       },
     });
@@ -50,34 +53,38 @@ async function processDailyCreditsForAllUsers() {
 
 /**
  * Start the daily credits job scheduler
- * Runs every 5 minutes for testing (normally 24 hours)
  */
 export function startDailyCreditsJob() {
-  if (jobInterval) {
+  if (cronTask) {
     console.log('[Daily Credits Job] Job already running');
     return;
   }
 
-  console.log('[Daily Credits Job] Starting scheduler (TESTING MODE: 5 minutes)...');
-  
-  // Run immediately on start
-  processDailyCreditsForAllUsers();
-  
-  // Then run every 5 minutes (for testing)
-  jobInterval = setInterval(() => {
-    processDailyCreditsForAllUsers();
-  }, 5 * 60 * 1000); // 5 minutes (for testing)
+  console.log('[Daily Credits Job] Starting scheduler (CRON 0 0 * * * UTC)...');
 
-  console.log('[Daily Credits Job] Scheduler started (runs every 5 minutes - TESTING MODE)');
+  // Run immediately on boot so devs don't wait until midnight
+  processDailyCreditsForAllUsers();
+
+  cronTask = cron.schedule(
+    '0 0 * * *',
+    () => {
+      processDailyCreditsForAllUsers();
+    },
+    {
+      timezone: 'UTC',
+    }
+  );
+
+  console.log('[Daily Credits Job] Scheduler started (runs nightly at 00:00 UTC)');
 }
 
 /**
  * Stop the daily credits job scheduler
  */
 export function stopDailyCreditsJob() {
-  if (jobInterval) {
-    clearInterval(jobInterval);
-    jobInterval = null;
+  if (cronTask) {
+    cronTask.stop();
+    cronTask = null;
     console.log('[Daily Credits Job] Scheduler stopped');
   }
 }

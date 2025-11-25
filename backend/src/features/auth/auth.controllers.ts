@@ -35,6 +35,13 @@ export async function signupHandler(request: FastifyRequest, reply: FastifyReply
       });
     }
 
+    if (error.message === 'Invalid referral code') {
+      return reply.status(400).send({
+        success: false,
+        error: error.message,
+      });
+    }
+
     request.log.error({ error, stack: error.stack }, 'Signup error');
     return reply.status(500).send({
       success: false,

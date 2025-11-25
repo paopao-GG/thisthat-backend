@@ -6,19 +6,28 @@ const STARTING_DAILY_CREDITS = 1000; // Starting daily credit allocation (Day 1)
 const DAILY_INCREMENT = 500; // Increment per consecutive day
 const MAX_DAILY_CREDITS = 10000; // Maximum daily credits (reached at day 18)
 const MAX_STREAK_DAYS = 18; // Days to reach max credits
+const MS_IN_DAY = 24 * 60 * 60 * 1000;
+
+function getUtcMidnight(date: Date): number {
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+}
+
+function getNextUtcMidnight(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + 1));
+}
 
 /**
  * Calculate daily credit allocation based on consecutive days
  * PRD: Starting from 1000 credits up to 1500, 2000, 2500... until max of 10000 (18-day streak)
  */
 export function calculateDailyCredits(consecutiveDays: number): number {
-  // Cap at max streak days
-  const cappedDays = Math.min(consecutiveDays, MAX_STREAK_DAYS);
-  
-  // Calculate: 1000 + (days - 1) * 500, capped at 10000
+  if (consecutiveDays >= MAX_STREAK_DAYS) {
+    return MAX_DAILY_CREDITS;
+  }
+
+  const cappedDays = Math.max(1, consecutiveDays);
   const credits = STARTING_DAILY_CREDITS + (cappedDays - 1) * DAILY_INCREMENT;
-  
-  // Ensure we don't exceed max
+
   return Math.min(credits, MAX_DAILY_CREDITS);
 }
 
@@ -41,14 +50,15 @@ export async function processDailyCreditAllocation(userId: string): Promise<{
 
   const now = new Date();
   const lastRewardAt = user.lastDailyRewardAt;
-  const lastLoginAt = user.lastLoginAt;
 
-  // Check if user can claim daily reward (24 hours since last claim)
+  // Check if user can claim daily reward (resets at 00:00 UTC)
   // PRD: Credit claim happens every 00:00 UTC
   if (lastRewardAt) {
-    const hoursSinceLastReward = (now.getTime() - lastRewardAt.getTime()) / (1000 * 60 * 60);
-    if (hoursSinceLastReward < 24) {
-      const nextAvailable = new Date(lastRewardAt.getTime() + 24 * 60 * 60 * 1000);
+    const nowMidnight = getUtcMidnight(now);
+    const lastRewardMidnight = getUtcMidnight(lastRewardAt);
+
+    if (nowMidnight === lastRewardMidnight) {
+      const nextAvailable = getNextUtcMidnight(lastRewardAt);
       return {
         creditsAwarded: 0,
         consecutiveDays: user.consecutiveDaysOnline,
@@ -57,26 +67,20 @@ export async function processDailyCreditAllocation(userId: string): Promise<{
     }
   }
 
-  // Calculate consecutive days
-  let consecutiveDays = user.consecutiveDaysOnline;
-  if (lastLoginAt) {
-    const daysSinceLastLogin = Math.floor(
-      (now.getTime() - lastLoginAt.getTime()) / (1000 * 60 * 60 * 24)
+  // Calculate consecutive days based on last rewarding day
+  let consecutiveDays = 1;
+  if (lastRewardAt) {
+    const daysSinceLastReward = Math.floor(
+      (getUtcMidnight(now) - getUtcMidnight(lastRewardAt)) / MS_IN_DAY
     );
-    
-    if (daysSinceLastLogin === 0) {
-      // Same day login - maintain streak
-      consecutiveDays = user.consecutiveDaysOnline;
-    } else if (daysSinceLastLogin === 1) {
-      // Next day - increment streak
+
+    if (daysSinceLastReward === 1) {
       consecutiveDays = user.consecutiveDaysOnline + 1;
+    } else if (daysSinceLastReward <= 0) {
+      consecutiveDays = user.consecutiveDaysOnline || 1;
     } else {
-      // Streak broken - reset to 1
       consecutiveDays = 1;
     }
-  } else {
-    // First login
-    consecutiveDays = 1;
   }
 
   // Calculate credits to award
@@ -120,7 +124,7 @@ export async function processDailyCreditAllocation(userId: string): Promise<{
     });
   });
 
-  const nextAvailable = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const nextAvailable = getNextUtcMidnight(now);
 
   return {
     creditsAwarded,

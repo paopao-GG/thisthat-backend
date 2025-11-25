@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../shared/contexts/AuthContext';
 import { economyService } from '../../shared/services/economyService';
 import { betService, type Bet } from '../../shared/services/betService';
+import { referralService, type ReferralStatsResponse } from '../../shared/services/referralService';
+import { purchaseService, type CreditPackage } from '../../shared/services/purchaseService';
 import type { UserStats } from '../../shared/types';
 
 // Mock data for stats that aren't in user profile yet
@@ -29,6 +31,13 @@ const ProfilePage: React.FC = () => {
   const [rewardError, setRewardError] = useState<string | null>(null);
   const [rewardSuccess, setRewardSuccess] = useState<string | null>(null);
   const [loadingBets, setLoadingBets] = useState(false);
+  const [referralStats, setReferralStats] = useState<ReferralStatsResponse | null>(null);
+  const [referralError, setReferralError] = useState<string | null>(null);
+  const [packages, setPackages] = useState<CreditPackage[]>([]);
+  const [purchaseLoadingId, setPurchaseLoadingId] = useState<string | null>(null);
+  const [purchaseError, setPurchaseError] = useState<string | null>(null);
+  const [purchaseSuccess, setPurchaseSuccess] = useState<string | null>(null);
+  const [referralCopyMessage, setReferralCopyMessage] = useState<string | null>(null);
 
   // Load bets history
   const loadBets = React.useCallback(async () => {
@@ -70,6 +79,45 @@ const ProfilePage: React.FC = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
+
+  // Load referral stats when authenticated user changes
+  useEffect(() => {
+    if (!user) {
+      setReferralStats(null);
+      return;
+    }
+
+    const loadReferralStats = async () => {
+      try {
+        const response = await referralService.getReferralStats();
+        setReferralStats(response);
+        setReferralError(null);
+      } catch (error: any) {
+        console.error('Failed to load referral stats:', error);
+        const errorMessage =
+          error?.response?.data?.error || error?.message || 'Failed to load referral stats';
+        setReferralError(errorMessage);
+      }
+    };
+
+    loadReferralStats();
+  }, [user?.id]);
+
+  // Load purchase packages (public endpoint)
+  useEffect(() => {
+    const loadPackages = async () => {
+      try {
+        const response = await purchaseService.getPackages();
+        if (response.success) {
+          setPackages(response.packages);
+        }
+      } catch (error) {
+        console.error('Failed to load credit packages:', error);
+      }
+    };
+
+    loadPackages();
+  }, []);
 
   // Handle daily reward claim
   const handleClaimReward = async () => {
@@ -126,17 +174,58 @@ const ProfilePage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
-  const purchaseOptions = [
-    { credits: 500, price: 4.99, popular: false },
-    { credits: 1000, price: 9.99, popular: false },
-    { credits: 2500, price: 19.99, popular: true },
-    { credits: 5000, price: 34.99, popular: false },
+  const defaultPackages: CreditPackage[] = [
+    { id: 'starter', label: 'Starter', credits: 500, usd: 4.99 },
+    { id: 'boost', label: 'Boost', credits: 1000, usd: 9.99 },
+    { id: 'pro', label: 'Pro', credits: 2500, usd: 19.99 },
+    { id: 'whale', label: 'Whale', credits: 5000, usd: 34.99 },
   ];
 
-  const handlePurchase = (credits: number, price: number) => {
-    console.log(`Purchasing ${credits} credits for $${price}`);
-    // TODO: Implement actual purchase logic
-    alert(`Purchase initiated: ${credits} credits for $${price}`);
+  const purchaseOptions = (packages.length ? packages : defaultPackages).map((pkg) => ({
+    ...pkg,
+    popular: pkg.id === 'pro',
+  }));
+
+  const referralLink = referralStats ? `https://thisthat.app/ref/${referralStats.referralCode}` : '';
+
+  const handlePurchase = async (packageId: string) => {
+    try {
+      setPurchaseLoadingId(packageId);
+      setPurchaseError(null);
+      setPurchaseSuccess(null);
+      const response = await purchaseService.createPurchase(packageId);
+      if (response.success) {
+        setPurchaseSuccess(
+          `Added ${response.purchase.creditsGranted.toLocaleString()} credits to your balance`
+        );
+        await refreshUser();
+      }
+    } catch (error: any) {
+      console.error('Purchase error:', error);
+      const message =
+        error?.response?.data?.error ||
+        error?.message ||
+        'Failed to complete purchase. Please try again.';
+      setPurchaseError(message);
+    } finally {
+      setPurchaseLoadingId(null);
+      setTimeout(() => {
+        setPurchaseSuccess(null);
+        setPurchaseError(null);
+      }, 5000);
+    }
+  };
+
+  const handleCopyReferralValue = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setReferralCopyMessage(`${label} copied!`);
+      setTimeout(() => setReferralCopyMessage(null), 3000);
+    } catch (error) {
+      console.error('Clipboard error:', error);
+      setReferralCopyMessage('Failed to copy. Please try again.');
+      setTimeout(() => setReferralCopyMessage(null), 3000);
+    }
   };
 
   if (loading || !user || !userStats) {
@@ -270,6 +359,16 @@ const ProfilePage: React.FC = () => {
         <p className="text-sm text-white/60 m-0 mb-6">
           Support the platform and boost your betting power
         </p>
+        {purchaseSuccess && (
+          <div className="p-3 mb-4 border border-green-500/40 text-green-300 text-sm" style={{ background: 'rgba(0, 40, 0, 0.4)' }}>
+            {purchaseSuccess}
+          </div>
+        )}
+        {purchaseError && (
+          <div className="p-3 mb-4 border border-red-500/40 text-red-300 text-sm" style={{ background: 'rgba(40, 0, 0, 0.4)' }}>
+            {purchaseError}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {purchaseOptions.map((option, index) => (
@@ -286,16 +385,18 @@ const ProfilePage: React.FC = () => {
                 </div>
               )}
               <div className="flex flex-col items-center gap-1">
+                <span className="text-xs text-white/50 uppercase tracking-wide">{option.label}</span>
                 <span className="text-3xl font-semibold text-white">{option.credits.toLocaleString()}</span>
                 <span className="text-xs text-white/50 uppercase tracking-wide">Credits</span>
               </div>
-              <div className="text-2xl font-semibold text-white">${option.price}</div>
+              <div className="text-2xl font-semibold text-white">${option.usd}</div>
               <button
-                className="w-full py-2 border border-white/10 text-white font-medium transition-all hover:border-white/20"
+                className="w-full py-2 border border-white/10 text-white font-medium transition-all hover:border-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ background: 'transparent' }}
-                onClick={() => handlePurchase(option.credits, option.price)}
+                onClick={() => handlePurchase(option.id)}
+                disabled={purchaseLoadingId === option.id}
               >
-                Purchase
+                {purchaseLoadingId === option.id ? 'Processing...' : 'Purchase'}
               </button>
             </div>
           ))}
@@ -308,24 +409,86 @@ const ProfilePage: React.FC = () => {
           <h2 className="text-xl font-semibold m-0 text-white">Refer Friends</h2>
         </div>
         <p className="m-0 mb-4 text-sm text-white/60">
-          Share your referral code and earn 200 credits for each friend who joins!
+          Share your referral code and earn 200 credits for each friend who joins. Rewards are paid
+          immediately after they sign up.
         </p>
-        <div className="flex items-center gap-3 p-4 border border-white/10 mb-4" style={{ background: 'rgba(30, 30, 30, 0.8)' }}>
-          <span className="flex-1 text-xl font-semibold text-white tracking-widest">PLAYER123</span>
-          <button className="px-6 py-2 border border-white/10 text-white font-medium hover:border-white/20 transition-all" style={{ background: 'transparent' }}>
-            Copy
-          </button>
+        {referralError && (
+          <div className="p-3 border border-red-500/40 text-red-300 text-sm mb-4" style={{ background: 'rgba(40, 0, 0, 0.4)' }}>
+            {referralError}
+          </div>
+        )}
+        <div className="flex flex-col gap-3 mb-4">
+          <div className="flex items-center gap-3 p-4 border border-white/10" style={{ background: 'rgba(30, 30, 30, 0.8)' }}>
+            <div className="flex-1">
+              <span className="text-xs text-white/50 uppercase tracking-wide">Referral Code</span>
+              <div className="text-xl font-semibold text-white tracking-[0.4em]">
+                {referralStats ? referralStats.referralCode : '--------'}
+              </div>
+            </div>
+            <button
+              className="px-6 py-2 border border-white/10 text-white font-medium hover:border-white/20 transition-all"
+              style={{ background: 'transparent' }}
+              onClick={() =>
+                referralStats && handleCopyReferralValue(referralStats.referralCode, 'Referral code')
+              }
+              disabled={!referralStats}
+            >
+              Copy
+            </button>
+          </div>
+          <div className="flex items-center gap-3 p-4 border border-white/10" style={{ background: 'rgba(30, 30, 30, 0.8)' }}>
+            <div className="flex-1">
+              <span className="text-xs text-white/50 uppercase tracking-wide">Referral Link</span>
+              <div className="text-sm font-medium text-white break-all">
+                {referralLink || 'https://thisthat.app/ref/--------'}
+              </div>
+            </div>
+            <button
+              className="px-6 py-2 border border-white/10 text-white font-medium hover:border-white/20 transition-all"
+              style={{ background: 'transparent' }}
+              onClick={() => referralLink && handleCopyReferralValue(referralLink, 'Referral link')}
+              disabled={!referralLink}
+            >
+              Share
+            </button>
+          </div>
+          {referralCopyMessage && (
+            <div className="text-xs text-center text-green-400">{referralCopyMessage}</div>
+          )}
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-4 mb-4">
           <div className="flex flex-col items-center gap-1 p-4 border border-white/10" style={{ background: 'rgba(30, 30, 30, 0.8)' }}>
-            <span className="text-2xl font-semibold text-white">5</span>
+            <span className="text-2xl font-semibold text-white">
+              {referralStats ? referralStats.referralCount : '--'}
+            </span>
             <span className="text-xs text-white/50 uppercase tracking-wide text-center">Friends Referred</span>
           </div>
           <div className="flex flex-col items-center gap-1 p-4 border border-white/10" style={{ background: 'rgba(30, 30, 30, 0.8)' }}>
-            <span className="text-2xl font-semibold text-white">1,000</span>
+            <span className="text-2xl font-semibold text-white">
+              {referralStats ? referralStats.referralCreditsEarned.toLocaleString() : '--'}
+            </span>
             <span className="text-xs text-white/50 uppercase tracking-wide text-center">Credits Earned</span>
           </div>
         </div>
+        {referralStats && referralStats.referredUsers.length > 0 && (
+          <div className="mt-4">
+            <p className="text-xs text-white/50 uppercase tracking-wide mb-2">Recent Referrals</p>
+            <div className="flex flex-col gap-2">
+              {referralStats.referredUsers.slice(0, 5).map((refUser) => (
+                <div
+                  key={refUser.id}
+                  className="flex items-center justify-between px-4 py-2 border border-white/10 text-sm"
+                  style={{ background: 'rgba(30, 30, 30, 0.6)' }}
+                >
+                  <span className="text-white font-medium">{refUser.username}</span>
+                  <span className="text-white/50">
+                    {new Date(refUser.joinedAt).toLocaleDateString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex items-start gap-4 p-6 border border-white/10 mb-8" style={{ background: 'transparent' }}>

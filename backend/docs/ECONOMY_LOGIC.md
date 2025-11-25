@@ -42,19 +42,19 @@ The economy system implements a comprehensive **credits-based economy** with sto
 ## Daily Credit Allocation
 
 ### Logic
-- Base allocation: 100 credits/day
-- Consecutive day bonus: +10 credits per consecutive day
-- Formula: `100 + (consecutiveDays * 10)`
+- Base allocation: **1,000 credits** on Day 1
+- Consecutive claims add **+500 credits per day** up to 10,000 credits on Day 18
+- Once the 10,000-credit max is reached it stays there until a user misses a claim
 
 ### Consecutive Days Calculation
-- Same day login: Maintain streak
-- Next day login: Increment streak
-- 2+ days gap: Reset to 1
+- Claiming within the same UTC date is blocked (users see the next UTC midnight timestamp)
+- Missing one UTC day resets the streak to Day 1 (1,000 credits)
+- Streak calculations are based on `lastDailyRewardAt` rather than last login time
 
 ### Scheduler
-- Background job runs every 24 hours
-- Processes all eligible users automatically
-- Can also be claimed manually via API
+- Background job runs nightly at **00:00 UTC** and processes every eligible account
+- Manual claims are still available via `POST /api/v1/economy/daily-credits`
+- Cron job also executes immediately on server boot during development for convenience
 
 ## Stock Market System
 
@@ -134,9 +134,9 @@ The economy system implements a comprehensive **credits-based economy** with sto
 
 ### Daily Credits Job
 - Location: `src/jobs/daily-credits.job.ts`
-- Runs every 24 hours automatically
-- Processes all eligible users
-- Started on server startup
+- Scheduled with `node-cron` to run nightly at **00:00 UTC**
+- Processes all eligible users and also runs once on server startup so developers don't have to wait until midnight
+- Aligns with PRD rule that claims reset at midnight UTC instead of a rolling 24-hour window
 - Stopped on graceful shutdown
 
 ## Usage Examples

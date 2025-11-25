@@ -10,6 +10,7 @@ const SignupPage: React.FC = () => {
     email: '',
     password: '',
     name: '',
+    referralCode: '',
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -20,7 +21,13 @@ const SignupPage: React.FC = () => {
     setLoading(true);
 
     try {
-      await signup(formData.username, formData.email, formData.password, formData.name);
+      await signup(
+        formData.username,
+        formData.email,
+        formData.password,
+        formData.name,
+        formData.referralCode || undefined
+      );
       navigate('/test/profile');
     } catch (err: any) {
       // Extract error message
@@ -142,6 +149,22 @@ const SignupPage: React.FC = () => {
               className="w-full px-4 py-3 text-white border border-white/10 focus:border-white/20 transition-all outline-none"
               style={{ background: 'rgba(30, 30, 30, 0.8)' }}
               placeholder="At least 8 characters"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="referralCode" className="block text-sm text-white/70 mb-2 uppercase tracking-wide">
+              Referral Code (Optional)
+            </label>
+            <input
+              type="text"
+              id="referralCode"
+              name="referralCode"
+              value={formData.referralCode}
+              onChange={handleChange}
+              className="w-full px-4 py-3 text-white border border-white/10 focus:border-white/20 transition-all outline-none"
+              style={{ background: 'rgba(30, 30, 30, 0.8)' }}
+              placeholder="ABC12345"
             />
           </div>
 

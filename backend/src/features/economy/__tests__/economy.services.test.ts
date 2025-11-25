@@ -1,5 +1,5 @@
 // Unit tests for Economy Services
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Create hoisted mock object
 const mockPrisma = vi.hoisted(() => ({
@@ -51,6 +51,12 @@ describe('Economy Services', () => {
     mockPrisma.$transaction.mockImplementation(async (callback: any) => {
       return callback(mockPrisma);
     });
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2025-01-01T10:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe('calculateDailyCredits', () => {
@@ -64,19 +70,14 @@ describe('Economy Services', () => {
       expect(result).toBe(1500);
     });
 
-    it('should return 9500 credits for day 18', () => {
+    it('should return 10000 credits for day 18', () => {
       const result = economyService.calculateDailyCredits(18);
-      expect(result).toBe(9500); // 1000 + (18-1)*500 = 9500
+      expect(result).toBe(10000);
     });
 
-    it('should cap at 9500 credits for days beyond 18 (capped at day 18)', () => {
-      // Day 18 gives: 1000 + (18-1)*500 = 9500
-      // Days beyond 18 are capped to day 18 calculation, then min'd with 10000
-      // Since 9500 < 10000, it returns 9500
-      const result19 = economyService.calculateDailyCredits(19);
-      expect(result19).toBe(9500); // Capped at day 18 calculation
-      const result30 = economyService.calculateDailyCredits(30);
-      expect(result30).toBe(9500); // Also capped at day 18 calculation
+    it('should stay at 10000 credits for streaks beyond day 18', () => {
+      expect(economyService.calculateDailyCredits(19)).toBe(10000);
+      expect(economyService.calculateDailyCredits(30)).toBe(10000);
     });
   });
 
@@ -111,11 +112,12 @@ describe('Economy Services', () => {
     });
 
     it('should increment consecutive days on next day claim', async () => {
+      vi.setSystemTime(new Date('2025-01-02T10:00:00Z'));
       const userWithStreak = {
         ...mockUser,
         consecutiveDaysOnline: 5,
-        lastDailyRewardAt: new Date(Date.now() - 25 * 60 * 60 * 1000), // 25 hours ago
-        lastLoginAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
+        lastDailyRewardAt: new Date('2025-01-01T03:00:00Z'),
+        lastLoginAt: new Date('2025-01-01T03:00:00Z'),
       };
 
       mockPrisma.user.findUnique.mockResolvedValue(userWithStreak as any);
@@ -134,10 +136,10 @@ describe('Economy Services', () => {
       expect(result.creditsAwarded).toBe(3500); // 1000 + (6-1)*500
     });
 
-    it('should return 0 credits if claimed within 24 hours', async () => {
+    it('should return 0 credits if claimed within same UTC day', async () => {
       const recentlyClaimedUser = {
         ...mockUser,
-        lastDailyRewardAt: new Date(Date.now() - 12 * 60 * 60 * 1000), // 12 hours ago
+        lastDailyRewardAt: new Date('2025-01-01T02:00:00Z'), // Same UTC day
       };
 
       mockPrisma.user.findUnique.mockResolvedValue(recentlyClaimedUser as any);
@@ -149,10 +151,11 @@ describe('Economy Services', () => {
     });
 
     it('should reset streak if gap is 2+ days', async () => {
+      vi.setSystemTime(new Date('2025-01-10T12:00:00Z'));
       const brokenStreakUser = {
         ...mockUser,
         consecutiveDaysOnline: 10,
-        lastLoginAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // 3 days ago
+        lastDailyRewardAt: new Date('2025-01-07T08:00:00Z'), // 3 days ago
       };
 
       mockPrisma.user.findUnique.mockResolvedValue(brokenStreakUser as any);
@@ -167,6 +170,27 @@ describe('Economy Services', () => {
 
       expect(result.consecutiveDays).toBe(1);
       expect(result.creditsAwarded).toBe(1000);
+    });
+
+    it('should award 10000 credits once streak hits max threshold', async () => {
+      const highStreakUser = {
+        ...mockUser,
+        consecutiveDaysOnline: 18,
+        lastDailyRewardAt: new Date('2024-12-31T08:00:00Z'),
+      };
+
+      mockPrisma.user.findUnique.mockResolvedValue(highStreakUser as any);
+      mockPrisma.user.update.mockResolvedValue({
+        ...highStreakUser,
+        consecutiveDaysOnline: 19,
+      } as any);
+      mockPrisma.creditTransaction.create.mockResolvedValue({} as any);
+      mockPrisma.dailyReward.create.mockResolvedValue({} as any);
+
+      const result = await economyService.processDailyCreditAllocation(userId);
+
+      expect(result.creditsAwarded).toBe(10000);
+      expect(result.consecutiveDays).toBe(19);
     });
   });
 

@@ -5,6 +5,7 @@ export interface SignupData {
   email: string;
   password: string;
   name: string;
+  referralCode?: string;
 }
 
 export interface LoginData {
@@ -21,6 +22,9 @@ export interface User {
   availableCredits: number;
   expendedCredits: number;
   consecutiveDaysOnline: number;
+  referralCode: string;
+  referralCount: number;
+  referralCreditsEarned: number;
 }
 
 export interface AuthResponse {
