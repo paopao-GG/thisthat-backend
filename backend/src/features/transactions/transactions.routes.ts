@@ -7,3 +7,4 @@ export default async function transactionRoutes(fastify: FastifyInstance) {
   fastify.get('/me', { preHandler: authenticate }, getUserTransactionsHandler);
 }
 
+
